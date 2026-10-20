@@ -25,34 +25,28 @@ done
 
 HEADING='## Claude Code subagents'
 # The last line of the section. Claude Code drops HTML comments from CLAUDE.md, so it costs nothing,
-# and it tells the installer where the section ends: whatever you add below it is kept.
+# and it shows where the section ends.
 END_MARK='<!-- claude-conf: end of section -->'
 SECTION="$SRC/CLAUDE.md"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKED_UP=0
 RETIRED=0
 
-# awk helpers for reading a CLAUDE.md, shared by md_plan and the section update; see md_awk.
-# Each line arrives as `line`, without its Windows line ending (cr = 1 if it had one; repeated \r
-# left by older versions are dropped too) or, on line 1, a UTF-8 byte order mark (bom = 1).
-# `fence` is the fence of the innermost code block the line is in: set on an opening line, ""
-# again on the closing line of the outermost block. `fence_at` is the latest opening line, and
-# `outer_at` the opening line of the outermost block still open.
+# awk helpers for reading a CLAUDE.md, shared by md_plan, the section update and the check of the
+# package's own section; see md_awk. Each line arrives as `line`, without trailing spaces, its
+# Windows line ending (cr = 1 if it had one; repeated \r left by older versions are dropped too)
+# or, on line 1, a UTF-8 byte order mark (bom = 1).
 #
-# Inside a block, a fence line of the same character, at least as long, with text after it
-# (```bash inside ```md) is ambiguous: Markdown makes it plain text, but people write it either
-# as a closer with a typo or to open a nested block. nested=0 reads it as a closer, nested=1 as
-# a nested opener; md_plan decides which reading to trust.
+# The installed section is found by its content, not by Markdown structure: it's the section
+# heading followed by lines of the package's section (`stock`: the current one, plus earlier ones
+# saved in old-sections/ when a line is reworded; see README). Code fences aren't parsed, so a
+# malformed one can't throw it off, and any line that isn't from the package is yours and is kept.
+# A # line inside a code block still counts as a heading where SCAN looks for one.
 MD_AWK='
-BEGIN { title = h; sub(/^## /, "", title) }
-# The fence ("```", "~~~~", ...) that starts this line, or "", with what follows it in `rest`.
-# Backticks after a backtick fence make it inline code, as in "```npm test``` runs the tests".
-function fence_run(l) {
-  rest = ""
-  if (!match(l, /^ ? ? ?(```+|~~~+)/)) return ""
-  rest = substr(l, RSTART + RLENGTH); l = substr(l, RSTART, RLENGTH); sub(/^ +/, "", l)
-  if (substr(l, 1, 1) == "`" && index(rest, "`")) return ""
-  return l
+BEGIN {
+  title = h; sub(/^## /, "", title)
+  stockf = ENVIRON["CLAUDE_CONF_STOCK"]
+  while ((getline s < stockf) > 0) if (s != "" && !is_heading(s)) stock[s] = 1
 }
 # True if the line is the section heading, allowing the extra spaces and closing #s Markdown allows.
 function is_heading(l) {
@@ -62,20 +56,14 @@ function is_heading(l) {
 }
 # True if the line is the end-of-section comment.
 function is_mark(l) {
-  sub(/[ \t]+$/, "", l)
+  sub(/^[ \t]+/, "", l)
   return l == mark
 }
-{ line = $0; cr = sub(/\r+$/, "", line); bom = (NR == 1 && sub(/^\357\273\277/, "", line)) }
-{
-  r = fence_run(line)
-  if (!depth) {
-    if (r != "") { depth = 1; stack[1] = r; fence_at = outer_at = NR }
-  } else if (r != "" && substr(r, 1, 1) == substr(stack[depth], 1, 1) && length(r) >= length(stack[depth])) {
-    if (rest ~ /^[ \t]*$/ || !nested) depth--
-    else { stack[++depth] = r; fence_at = NR }
-  }
-  fence = depth ? stack[depth] : ""
+# True if the line is a # or ## heading, which ends an old copy of the section without its end comment.
+function is_top(l) {
+  return l ~ /^ ? ? ?##?([ \t]|$)/
 }
+{ line = $0; cr = sub(/\r+$/, "", line); bom = (NR == 1 && sub(/^\357\273\277/, "", line)); sub(/[ \t]+$/, "", line) }
 '
 
 # Run awk program $2 on Markdown file $1 with the MD_AWK helpers; any further arguments go to awk.
@@ -85,56 +73,87 @@ md_awk() {
   LC_ALL=C awk -v h="$HEADING" -v mark="$END_MARK" "$@" "$MD_AWK$prog" "$file"
 }
 
-# Lists the lines, outside code blocks, that hold the section heading, the end-of-section comment
-# and any heading; and the opening line of a code block still open at the end of the file (0 if none).
+# Finds the copies of the section in a CLAUDE.md. A section heading is an installed copy if lines
+# of the package's section come right under it, before any other heading; other section headings
+# are an older or edited copy, or something of yours. An installed copy runs to its end-of-section
+# comment, if one comes before the next section heading, and otherwise to the next # or ## heading.
+# Prints "installed|others|stray line|strays": the installed copies as "heading line:last line",
+# the other headings' lines, and the first and number of package lines outside the installed copies.
 SCAN='
-  fence == "" && is_heading(line) { heads = heads " " NR }
-  fence == "" && is_mark(line) { marks = marks " " NR }
-  fence == "" && line ~ /^#+([ \t]|$)/ { hds = hds " " NR }
-  END { printf "%d|%s|%s|%s\n", (fence != "" ? outer_at : 0), heads, marks, hds }
+  function done_heading(last) {
+    if (!at) return
+    if (mark_at) last = mark_at; else if (top_at) last = top_at - 1
+    if (hits) { installed = installed " " at ":" last; from[++copies] = at; to[copies] = last }
+    else others = others " " at
+    at = 0
+  }
+  is_heading(line) { done_heading(NR - 1); at = NR; sub_at = top_at = mark_at = hits = 0; next }
+  at && is_mark(line) { mark_at = NR; done_heading(NR); next }
+  at && !sub_at && line ~ /^ ? ? ?#+([ \t]|$)/ { sub_at = NR }
+  at && !top_at && is_top(line) { top_at = NR }
+  (line in stock) && !is_mark(line) {
+    pkg[++pkgs] = NR
+    if (at && !sub_at) hits++
+  }
+  END {
+    done_heading(NR)
+    for (i = 1; i <= pkgs; i++) {
+      inside = 0
+      for (j = 1; j <= copies; j++) if (pkg[i] > from[j] && pkg[i] <= to[j]) inside = 1
+      if (!inside) { if (!stray) stray = pkg[i]; strays++ }
+    }
+    printf "%s|%s|%d|%d\n", installed, others, stray, strays
+  }
 '
 
-# Read file $1 both ways (see MD_AWK) and decide how to treat it. Sets PLAN to found, missing,
-# unclosed (no heading outside code, and a code block that's never closed: the heading may be in
-# it) or ambiguous (the two readings put the heading in different places and neither is clearly
-# right), plus PLAN_NESTED, PLAN_HEADS, PLAN_MARKS and PLAN_HDS (SCAN's lists) for the update, and
-# PLAN_LINE for messages.
+# Sets PLAN_INSTALLED, PLAN_OTHERS, PLAN_STRAY and PLAN_STRAYS to SCAN's results for file $1.
 md_plan() {
-  local lenient nested l_open l_heads l_marks l_hds n_open n_heads n_marks n_hds x
-  lenient="$(md_awk "$1" "$SCAN" -v nested=0)" || return 1
-  nested="$(md_awk "$1" "$SCAN" -v nested=1)" || return 1
-  IFS='|' read -r l_open l_heads l_marks l_hds <<< "$lenient"
-  IFS='|' read -r n_open n_heads n_marks n_hds <<< "$nested"
-  # Prefer a reading in which every code block is closed
-  if [ "$l_heads" = "$n_heads" ]; then
-    PLAN_NESTED=0
-    if [ "$l_open" != 0 ] && [ "$n_open" = 0 ]; then PLAN_NESTED=1; fi
-  elif [ "$l_open" = 0 ] && [ "$n_open" != 0 ]; then
-    PLAN_NESTED=0
-  elif [ "$n_open" = 0 ] && [ "$l_open" != 0 ]; then
-    PLAN_NESTED=1
-  else
-    PLAN=ambiguous PLAN_LINE=""
-    for x in $l_heads; do case " $n_heads " in *" $x "*) ;; *) PLAN_LINE="$PLAN_LINE $x" ;; esac; done
-    for x in $n_heads; do case " $l_heads " in *" $x "*) ;; *) PLAN_LINE="$PLAN_LINE $x" ;; esac; done
-    PLAN_LINE="${PLAN_LINE# }"
-    return 0
-  fi
-  if [ "$PLAN_NESTED" = 1 ]; then
-    PLAN_HEADS="$n_heads" PLAN_MARKS="$n_marks" PLAN_HDS="$n_hds" PLAN_LINE="$n_open"
-  else
-    PLAN_HEADS="$l_heads" PLAN_MARKS="$l_marks" PLAN_HDS="$l_hds" PLAN_LINE="$l_open"
-  fi
-  if [ -n "$PLAN_HEADS" ]; then PLAN=found
-  elif [ "$PLAN_LINE" != 0 ]; then PLAN=unclosed
-  else PLAN=missing
-  fi
+  local out
+  out="$(md_awk "$1" "$SCAN")" || return 1
+  IFS='|' read -r PLAN_INSTALLED PLAN_OTHERS PLAN_STRAY PLAN_STRAYS <<< "$out"
 }
 
-# True if the file has the section heading outside code blocks.
+# True if the file has an installed copy of the section.
 has_section() {
-  [ -f "$1" ] && md_plan "$1" && [ "$PLAN" = found ]
+  [ -f "$1" ] && md_plan "$1" && [ -n "$PLAN_INSTALLED" ]
 }
+
+# True if the file has a section heading at all, installed copy or not.
+has_heading() {
+  [ -f "$1" ] && md_plan "$1" && [ -n "$PLAN_INSTALLED$PLAN_OTHERS" ]
+}
+
+# Temp files: the new CLAUDE.md; the package's section without Windows line endings, trailing
+# spaces, a byte order mark or blank lines around it (a copy saved on Windows would otherwise put
+# them in the middle of your CLAUDE.md); and the lines of every version of the section (see MD_AWK).
+tmpdir="${TMPDIR:-/tmp}"
+if [ ! -d "$tmpdir" ] || [ ! -w "$tmpdir" ]; then tmpdir=/tmp; fi
+tmp="" section="" stock=""
+trap 'rm -f "$tmp" "$section" "$stock"' EXIT
+tmp="$(mktemp "$tmpdir/claude-conf.XXXXXX")"
+section="$(mktemp "$tmpdir/claude-conf.XXXXXX")"
+stock="$(mktemp "$tmpdir/claude-conf.XXXXXX")"
+clean() {
+  LC_ALL=C awk 'NR == 1 { sub(/^\357\273\277/, "") } { sub(/\r+$/, ""); sub(/[ \t]+$/, ""); print }' "$1"
+}
+clean "$SECTION" | LC_ALL=C awk '{ l[NR] = $0 } END {
+  s = 1; while (s <= NR && l[s] == "") s++
+  e = NR; while (e >= s && l[e] == "") e--
+  for (i = s; i <= e; i++) print l[i]
+}' > "$section"
+{
+  cat "$section"
+  for f in "$SRC"/old-sections/*.md; do if [ -f "$f" ]; then clean "$f"; fi; done
+} > "$stock"
+export CLAUDE_CONF_SECTION="$section" CLAUDE_CONF_STOCK="$stock"
+
+# The package's section must be the heading, then lines of its own, then the end-of-section
+# comment, with no other headings or end comments; finding it again in CLAUDE.md relies on that.
+if ! md_awk "$section" 'NR == 1 && !is_heading(line) { bad = 1 } NR > 1 && line ~ /^ ? ? ?#+([ \t]|$)/ { bad = 1 }
+    is_mark(line) { marks++ } { last = line } END { exit (bad || marks != 1 || !is_mark(last)) }'; then
+  printf '%-14s %s\n' error "The package's CLAUDE.md must start with the \"$HEADING\" heading, end with the line $END_MARK, and have no other headings or end comments. Nothing was changed." >&2
+  exit 1
+fi
 
 if [ "$PROJECT" = 1 ]; then
   if [ "$PWD" -ef "$SRC" ]; then
@@ -151,6 +170,8 @@ if [ "$PROJECT" = 1 ]; then
   # Use whichever project CLAUDE.md already has the section, else whichever exists, else ./CLAUDE.md
   CLAUDE_MD="$PWD/CLAUDE.md"
   if has_section "$DEST/CLAUDE.md" && ! has_section "$CLAUDE_MD"; then
+    CLAUDE_MD="$DEST/CLAUDE.md"
+  elif has_heading "$DEST/CLAUDE.md" && ! has_heading "$CLAUDE_MD"; then
     CLAUDE_MD="$DEST/CLAUDE.md"
   elif [ ! -f "$CLAUDE_MD" ] && [ -f "$DEST/CLAUDE.md" ]; then
     CLAUDE_MD="$DEST/CLAUDE.md"
@@ -223,37 +244,65 @@ show_diff() {
   diff -u "$1" "$2" | sed '1,2d; s/^/    /' || true
 }
 
-# Temp files: the new CLAUDE.md, and the section without Windows line endings or a byte order mark
-# (a package copy saved on Windows would otherwise put them in the middle of your CLAUDE.md).
-tmpdir="${TMPDIR:-/tmp}"
-if [ ! -d "$tmpdir" ] || [ ! -w "$tmpdir" ]; then tmpdir=/tmp; fi
-tmp="" section=""
-trap 'rm -f "$tmp" "$section"' EXIT
-tmp="$(mktemp "$tmpdir/claude-conf.XXXXXX")"
-section="$(mktemp "$tmpdir/claude-conf.XXXXXX")"
-LC_ALL=C awk 'NR == 1 { sub(/^\357\273\277/, "") } { sub(/\r+$/, ""); print }' "$SECTION" > "$section"
-export CLAUDE_CONF_SECTION="$section"
-
 if [ "$DRY_RUN" = 1 ]; then echo "Dry run: nothing will change."; fi
 echo "Agents and skills: $DEST"
 echo "CLAUDE.md section: $CLAUDE_MD"
 echo
 
-# Check CLAUDE.md before changing anything, so a file the section can't safely go in stops the
-# whole install rather than leaving new agents next to old routing.
+# CLAUDE.md: work out the new file first, so a problem with it stops the whole install before
+# anything changes, rather than leaving new agents next to old routing. The first installed copy
+# of the section (see SCAN) becomes the new section, and later copies are merged into it: in each
+# copy, the package's own lines and the blank lines between them are dropped, and every other line
+# is kept where it is. If there's no installed copy, the section is appended.
 if [ -f "$CLAUDE_MD" ]; then
   if ! md_plan "$CLAUDE_MD"; then echo "Couldn't read $CLAUDE_MD" >&2; exit 1; fi
-  case "$PLAN" in
-    unclosed) problem="the code block that starts on line $PLAN_LINE is never closed, and the section heading may be inside it. Close the block" ;;
-    ambiguous) problem="the code block fences around line $PLAN_LINE can be read two ways, so it's unclear whether the \"Claude Code subagents\" heading there is your section or part of an example. Use a longer fence for the outer block (\`\`\`\` around \`\`\`)" ;;
-    *) problem="" ;;
+  status=0
+  md_awk "$CLAUDE_MD" '
+    BEGIN { n = split(installed, il, " "); for (i = 1; i <= n; i++) { split(il[i], p, ":"); stop[p[1] + 0] = p[2] + 0 } }
+    function flush() { printf "%s", blanks; blanks = "" }
+    in_old && NR > end_at && !(NR in stop) { flush(); in_old = 0 }
+    (NR in stop) {
+      if (!found) {
+        if (bom) printf "\357\273\277"
+        sec = ENVIRON["CLAUDE_CONF_SECTION"]
+        while ((getline s < sec) > 0) printf "%s%s\n", s, (cr ? "\r" : "")
+        found = 1
+      }
+      in_old = 1; end_at = stop[NR]; next
+    }
+    in_old && (is_mark(line) || (line in stock)) { blanks = ""; next }
+    in_old && line == "" { blanks = blanks (cr ? "\r" : "") "\n"; next }
+    in_old { flush() }
+    { print }
+    END { flush(); exit (found ? 0 : 3) }
+  ' -v installed="$PLAN_INSTALLED" > "$tmp" || status=$?
+
+  case "$status" in
+    0) verb=updated ;;
+    3)
+      # No section yet: append it after a blank line, matching the file's line endings
+      verb=appended
+      eol=""
+      if grep -q $'\r' "$CLAUDE_MD"; then eol=$'\r'; fi
+      {
+        cat "$CLAUDE_MD"
+        if [ -s "$CLAUDE_MD" ]; then
+          if [ -n "$(tail -c 1 "$CLAUDE_MD")" ]; then printf '%s\n' "$eol"; fi
+          printf '%s\n' "$eol"
+        fi
+        awk -v eol="$eol" '{ print $0 eol }' "$section"
+      } > "$tmp" ;;
+    *) echo "Couldn't read $CLAUDE_MD" >&2; exit 1 ;;
   esac
-  if [ -n "$problem" ]; then
-    printf '%-14s %s\n' error "$CLAUDE_MD: $problem, then run this again. Nothing was changed." >&2
-    exit 1
-  fi
-  # Keep the plan for the update below; has_section overwrites PLAN_*
-  NESTED="$PLAN_NESTED" MARKS="$PLAN_MARKS" HDS="$PLAN_HDS"
+  if cmp -s "$tmp" "$CLAUDE_MD"; then verb=unchanged; fi
+else
+  cat "$section" > "$tmp"
+  verb=created
+fi
+md_dir="$(dirname "$CLAUDE_MD")"
+if [ "$verb" != unchanged ] && { { [ -f "$CLAUDE_MD" ] && [ ! -w "$CLAUDE_MD" ]; } || { [ -d "$md_dir" ] && [ ! -w "$md_dir" ]; }; }; then
+  printf '%-14s %s\n' error "$CLAUDE_MD: can't write to it or to its folder, so the section can't be updated. Nothing was changed." >&2
+  exit 1
 fi
 
 # Agents
@@ -289,80 +338,41 @@ retire "$DEST/skills/systematic-debugging" systematic-debugging
 retire "$DEST/skills/verify-before-done" verify-before-done
 retire "$DEST/skills/test-driven-development" test-driven-development
 
-# CLAUDE.md: replace the section, or append it if it's missing (md_plan above said which). The old
-# section runs from its heading to its end-of-section comment, if no other heading comes first.
-# Otherwise (a section written by an older version, say) it runs to the next heading of any level,
-# ---/***/___ line or code block (the section has none, so a code block there is yours).
-# Headings inside code blocks don't count.
-if [ -f "$CLAUDE_MD" ]; then
-  status=0
-  md_awk "$CLAUDE_MD" '
-    BEGIN { nh = split(hds, hl, " "); nm = split(marks, ml, " ") }
-    # The line of the end-of-section comment that belongs to the heading on line n, or 0
-    function mark_after(n,   i, j) {
-      for (i = 1; i <= nm; i++) {
-        if (ml[i] + 0 <= n) continue
-        for (j = 1; j <= nh; j++) if (hl[j] + 0 > n && hl[j] + 0 < ml[i] + 0) return 0
-        return ml[i] + 0
-      }
-      return 0
-    }
-    fence == "" && is_heading(line) {
-      if (!found) {
-        if (bom) printf "\357\273\277"
-        sec = ENVIRON["CLAUDE_CONF_SECTION"]
-        while ((getline s < sec) > 0) printf "%s%s\n", s, (cr ? "\r" : "")
-      }
-      found = 1; skip = 1; end_at = mark_after(NR); next
-    }
-    skip && end_at { if (NR == end_at) skip = 0; next }
-    skip && ((fence != "" && fence_at == NR) || line ~ /^#+([ \t]|$)/ || line ~ /^(---|\*\*\*|___)[ \t]*$/) {
-      printf "%s\n", (cr ? "\r" : ""); skip = 0
-    }
-    !skip { print }
-    END { exit (found ? 0 : 3) }
-  ' -v nested="$NESTED" -v marks="$MARKS" -v hds="$HDS" > "$tmp" || status=$?
-
-  case "$status" in
-    0) verb=updated ;;
-    3)
-      # No section yet: append it after a blank line, matching the file's line endings
-      verb=appended
-      eol=""
-      if grep -q $'\r' "$CLAUDE_MD"; then eol=$'\r'; fi
-      {
-        cat "$CLAUDE_MD"
-        if [ -s "$CLAUDE_MD" ]; then
-          if [ -n "$(tail -c 1 "$CLAUDE_MD")" ]; then printf '%s\n' "$eol"; fi
-          printf '%s\n' "$eol"
-        fi
-        awk -v eol="$eol" '{ print $0 eol }' "$section"
-      } > "$tmp" ;;
-    *) echo "Couldn't read $CLAUDE_MD" >&2; exit 1 ;;
-  esac
-
-  if cmp -s "$tmp" "$CLAUDE_MD"; then
-    say unchanged "$CLAUDE_MD"
-  else
+# CLAUDE.md, as worked out above
+case "$verb" in
+  unchanged) say unchanged "$CLAUDE_MD" ;;
+  created)
+    run mkdir -p "$md_dir"
+    if [ "$DRY_RUN" = 0 ]; then cat "$tmp" > "$CLAUDE_MD"; fi
+    say created "$CLAUDE_MD" ;;
+  *)
     say "$verb" "$CLAUDE_MD"
     show_diff "$CLAUDE_MD" "$tmp"
     run cp "$CLAUDE_MD" "$CLAUDE_MD.bak-$STAMP"
     run cp "$tmp" "$CLAUDE_MD"
-    if [ "$DRY_RUN" = 0 ]; then echo "               previous copy: $CLAUDE_MD.bak-$STAMP"; fi
+    if [ "$DRY_RUN" = 0 ]; then echo "               previous copy: $CLAUDE_MD.bak-$STAMP"; fi ;;
+esac
+# What the new CLAUDE.md still holds besides the section (line numbers are in the new file)
+if md_plan "$tmp"; then
+  for n in $PLAN_OTHERS; do
+    say warning "$CLAUDE_MD line $n has a \"Claude Code subagents\" heading with none of this package's lines under it (an older or edited copy, or something of yours), so it's left alone. If it's an old copy, delete it; if it's yours, rename the heading to stop this warning."
+  done
+  if [ "$PLAN_STRAYS" -gt 0 ]; then
+    if [ "$PLAN_STRAYS" = 1 ]; then what="line $PLAN_STRAY repeats a line"; else what="line $PLAN_STRAY and $((PLAN_STRAYS - 1)) more repeat lines"; fi
+    say warning "$CLAUDE_MD $what of this package's section outside the section, e.g. under an edited heading or after a # line inside it. If they're left over, delete them."
   fi
-else
-  run mkdir -p "$(dirname "$CLAUDE_MD")"
-  if [ "$DRY_RUN" = 0 ]; then cat "$section" > "$CLAUDE_MD"; fi
-  say created "$CLAUDE_MD"
 fi
 
 # Other CLAUDE.md files with the section: Claude Code loads all of them
 for other in "$HOME/.claude/CLAUDE.md" "$PWD/CLAUDE.md" "$PWD/.claude/CLAUDE.md"; do
   [ -f "$other" ] || continue
   if [ "$other" -ef "$CLAUDE_MD" ] || [ "$other" -ef "$SECTION" ]; then continue; fi
-  if has_section "$other"; then
+  md_plan "$other" || continue
+  if [ -n "$PLAN_INSTALLED" ]; then
     if [ "$other" -ef "$HOME/.claude/CLAUDE.md" ]; then hint="install.sh without --project"; else hint="install.sh --project from that folder"; fi
     say warning "$other also has the \"Claude Code subagents\" section, and Claude Code loads both. Remove one, or run $hint to update it."
+  elif [ -n "$PLAN_OTHERS" ]; then
+    say warning "$other has a \"Claude Code subagents\" heading too, with none of this package's lines under it, and Claude Code loads that file as well. If it's an old copy, delete it."
   fi
 done
 

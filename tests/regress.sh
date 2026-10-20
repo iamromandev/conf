@@ -12,7 +12,10 @@ T="$(mktemp -d "${TMPDIR:-/tmp}/claude-conf-test.XXXXXX")"
 mkdir -p "$T/tmp"
 cp -R "$PKG_SRC" "$T/pkg"
 PKG="$T/pkg"
-SEC="$(cat "$PKG/CLAUDE.md")"
+SEC="$(cat "$PKG/CLAUDE.md")"                  # the section as installed now
+ORIG="$PKG/tests/fixtures/original-section.md"  # the section as the first release installed it
+OLD="$(cat "$ORIG")"
+OLD_BODY="$(sed 1d "$ORIG")"                    # everything under its heading
 MARK='<!-- claude-conf: end of section -->'
 PASS=0 FAIL=0
 
@@ -31,156 +34,144 @@ same() {
 }
 # idem <case> <home>: a second run leaves CLAUDE.md byte-identical and reports it unchanged
 idem() { local f="$2/.claude/CLAUDE.md" a out; a=$(sum "$f"); out=$(inst "$2"); if [ "$a" = "$(sum "$f")" ] && printf '%s' "$out" | grep -q "unchanged .*CLAUDE.md"; then ok "$1 (idempotent)"; else bad "$1 (idempotent)" "second run changed CLAUDE.md"; fi; }
-# refused <case> <home> <expected words> [args]: the run exits 1, says nothing changed, and leaves HOME as it was
+# refused <case> <home> <expected words> [pkg] [args]: the run exits 1, says nothing changed, and leaves HOME as it was
 refused() {
-  local a out rc; a=$(treesum "$2"); out=$(inst "$2" "" ${4:-}); rc=$?
+  local a out rc; a=$(treesum "$2"); out=$(inst "$2" "${4:-}" ${5:-}); rc=$?
   if [ $rc = 1 ] && [ "$a" = "$(treesum "$2")" ] && printf '%s' "$out" | grep -q "$3" && printf '%s' "$out" | grep -q 'Nothing was changed'; then ok "$1"
   else bad "$1" "rc=$rc, changed=$([ "$a" = "$(treesum "$2")" ] && echo no || echo yes), output: $(printf '%s' "$out" | grep -m1 -i 'error\|warning')"; fi
 }
+# put <home> <printf format> [args...]: write CLAUDE.md in that HOME
+put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.md"; }
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
 [ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 5 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 4 ] && ok "B1 fresh install copies 5 agents, 4 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
 out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && ok "B1 rerun reports 10 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
-
-H=$(newhome b2); printf '# Mine\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; mkdir -p "$H/.claude/agents"; printf -- '---\nname: Plan\n---\n' > "$H/.claude/agents/plan.md"
+H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"; mkdir -p "$H/.claude/agents"; printf -- '---\nname: Plan\n---\n' > "$H/.claude/agents/plan.md"
 a=$(treesum "$H"); inst "$H" "" --dry-run >/dev/null; [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
-
-H=$(newhome b3); printf '# Mine\n\nstuff\n\n## Claude Code subagents\n\n- old\n\n## Other\n\nkeep\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "B3 mid-file section replaced, rest kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\nstuff\n\n%s\n\n## Other\n\nkeep' "$SEC")"; idem B3 "$H"
-
-H=$(newhome b4); printf '# Mine\n\n```md\n## Claude Code subagents\n- example\n```\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "B4 fenced example heading left alone, section appended" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```md\n## Claude Code subagents\n- example\n```\n\n%s' "$SEC")"; idem B4 "$H"
-
-H=$(newhome b5); printf '# Mine\r\n\r\n## Claude Code subagents\r\n\r\n- old\r\n\r\n## Other\r\nkeep\r\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-f="$H/.claude/CLAUDE.md"; lines=$(wc -l < "$f" | tr -d ' '); crs=$(grep -c $'\r$' "$f"); dbl=$(grep -c $'\r\r' "$f")
-[ "$lines" = "$crs" ] && [ "$dbl" = 0 ] && [ "$(heads "$f")" = 1 ] && ! grep -q '^- old' "$f" && ok "B5 CRLF target stays CRLF, section replaced" || bad B5 "lines=$lines cr=$crs dbl=$dbl heads=$(heads "$f")"; idem B5 "$H"
-
 H=$(newhome b6); out=$(cd "$H" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "home folder" && ok "B6 --project refused in HOME (exit $rc)" || bad B6 "not refused in HOME (exit $rc)"
 out=$(cd "$PKG" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "claude-conf package itself" && ok "B6 --project refused in package (exit $rc)" || bad B6 "not refused in package (exit $rc)"
-
-H=$(newhome b7); printf 'abc' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
+H=$(newhome b7); put "$H" 'abc'; inst "$H" >/dev/null
 same "B7 append after a file with no final newline" "$H/.claude/CLAUDE.md" "$(printf 'abc\n\n%s' "$SEC")"; idem B7 "$H"
-
 H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/brainstorming"; printf -- '---\nname: Plan\ndescription: x\n---\nbody\n' > "$H/.claude/agents/plan.md"; printf -- '---\nname: brainstorming\n---\n' > "$H/.claude/skills/brainstorming/SKILL.md"
 inst "$H" >/dev/null; [ ! -e "$H/.claude/agents/plan.md" ] && [ ! -e "$H/.claude/skills/brainstorming" ] && ls "$H"/.claude/claude-conf-backup-*/agents/plan.md >/dev/null 2>&1 && ok "B8 old claude-conf agent and skill retired to backup" || bad B8 "not retired"
+H=$(newhome b9); put "$H" '# Mine\n\nstuff\n'; inst "$H" >/dev/null
+same "B9 section appended to a file without one" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\nstuff\n\n%s' "$SEC")"; idem B9 "$H"
 
-H=$(newhome b9); printf '# Mine\n\n## Claude Code subagents\n\n- old\n\n---\n\nafter rule\n\n# Top\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "B9 section ends at a --- line" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s\n\n---\n\nafter rule\n\n# Top' "$SEC")"
+echo "== Upgrading a section installed by the first release (no end comment)"
+H=$(newhome u1); put "$H" '# Mine\n\n%s\n- My own rule.\n@docs/team.md\n' "$OLD"; inst "$H" >/dev/null
+same "U1 lines appended after the old section are kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s\n- My own rule.\n@docs/team.md' "$SEC")"; idem U1 "$H"
+H=$(newhome u2); put "$H" '# Mine\n\nstuff\n\n%s\n\n## Other\n\nkeep\n' "$OLD"; inst "$H" >/dev/null
+same "U2 section in the middle: replaced, the rest kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\nstuff\n\n%s\n\n## Other\n\nkeep' "$SEC")"; idem U2 "$H"
+H=$(newhome u3); { sed -n 1,5p "$ORIG"; echo '- Use pnpm, never npm.'; sed -n '6,$p' "$ORIG"; } > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
+same "U3 a line of yours between the old bullets is kept, after the section" "$H/.claude/CLAUDE.md" "$(printf '%s\n- Use pnpm, never npm.' "$SEC")"; idem U3 "$H"
+H=$(newhome u4); sed '4s/$/ (my edit)/' "$ORIG" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
+same "U4 an edited bullet is kept, the others replaced" "$H/.claude/CLAUDE.md" "$(printf '%s\n%s (my edit)' "$SEC" "$(sed -n 4p "$ORIG")")"; idem U4 "$H"
+H=$(newhome u5); put "$H" '%s\n\nbetween\n\n%s\n\n## End\n' "$OLD" "$OLD"; inst "$H" >/dev/null
+same "U5 two copies are merged, what's between them kept" "$H/.claude/CLAUDE.md" "$(printf '%s\n\nbetween\n\n## End' "$SEC")"; idem U5 "$H"
+H=$(newhome u6); awk '{ printf "%s\r\n", $0 }' "$ORIG" > "$H/.claude/CLAUDE.md"; printf -- '- mine\r\n' >> "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null; f="$H/.claude/CLAUDE.md"
+[ "$(wc -l < "$f" | tr -d ' ')" = "$(grep -c $'\r$' "$f")" ] && [ "$(grep -c $'\r\r' "$f")" = 0 ] && [ "$(heads "$f")" = 1 ] && grep -q $'^- mine\r$' "$f" && ok "U6 CRLF file stays CRLF, your line kept" || bad U6 "heads=$(heads "$f")"; idem U6 "$H"
+H=$(newhome u6b); { awk '{ printf "%s\r\r\n", $0 }' "$ORIG"; awk '{ printf "%s\r\r\n", $0 }' "$ORIG"; printf '\r\n## Other\r\n'; } > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null; f="$H/.claude/CLAUDE.md"
+[ "$(heads "$f")" = 1 ] && [ "$(grep -c $'\r\r' "$f")" = 0 ] && grep -q '^## Other' "$f" && ok "U6b copies with \\r\\r line endings from older versions are repaired and merged" || bad U6b "heads=$(heads "$f") dbl=$(grep -c $'\r\r' "$f")"; idem U6b "$H"
+H=$(newhome u7); put "$H" '\357\273\277%s\n\n## Other\n' "$OLD"; inst "$H" >/dev/null
+same "U7 BOM before the heading is kept" "$H/.claude/CLAUDE.md" "$(printf '\357\273\277%s\n\n## Other' "$SEC")"; idem U7 "$H"
+for t in '-----\nmy note' 'Notes\n=====\nmore' '```bash\nmake\n```' '* * *\nx' '<!-- note -->\ny' '  ## Indented\nz' '> quote\n| a | b |'; do
+  H=$(newhome "u8$(printf '%s' "$t" | cksum | cut -d' ' -f1)"); put "$H" "%s\n$t\n" "$OLD"; inst "$H" >/dev/null
+  same "U8 kept right after the old section: '$t'" "$H/.claude/CLAUDE.md" "$(printf "%s\n$t" "$SEC")"
+done
+for hv in '## Claude Code subagents  ' '## Claude Code subagents ##' '##\tClaude  Code subagents'; do
+  H=$(newhome "u9$(printf '%s' "$hv" | cksum | cut -d' ' -f1)"); put "$H" "$hv\n%s\n" "$OLD_BODY"; inst "$H" >/dev/null
+  same "U9 heading written as '$hv' is recognized" "$H/.claude/CLAUDE.md" "$SEC"
+done
+H=$(newhome u11); put "$H" '# Mine\n\n%s\n- Use pnpm.\n@docs/x.md\n' "$SEC"; inst "$H" >/dev/null
+same "U11 a current section: lines after the end comment are kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s\n- Use pnpm.\n@docs/x.md' "$SEC")"; idem U11 "$H"
+H=$(newhome u12); rmdir "$H/.claude"; inst "$H" >/dev/null; printf -- '- Added later by Claude.\n' >> "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
+same "U12 a line appended after a fresh install survives the next run" "$H/.claude/CLAUDE.md" "$(printf '%s\n- Added later by Claude.' "$SEC")"
+H=$(newhome u13); put "$H" '%s\n\n## Notes\n%s\n' "$OLD" "$(sed -n 3p "$ORIG")"; inst "$H" >/dev/null
+same "U13 a copy of a section line under another heading isn't touched" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n## Notes\n%s' "$SEC" "$(sed -n 3p "$ORIG")")"
+H=$(newhome u14); put "$H" '%s\n\n### My notes\n- mine\n%s\n' "$OLD" "$(sed -n 3p "$ORIG")"; inst "$H" >/dev/null
+same "U14 a ### subsection inside the old section is kept, its package lines still replaced" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n### My notes\n- mine' "$SEC")"; idem U14 "$H"
+BLOCK='```bash\n# fast checks\nmake check\n```'
+H=$(newhome u15); { sed -n 1,6p "$ORIG"; printf "$BLOCK\n"; sed -n '7,$p' "$ORIG"; } > "$H/.claude/CLAUDE.md"; out=$(inst "$H")
+printf '%s' "$out" | grep -q 'line 19 and 5 more repeat' && ok "U15 a # line in a code block ends a section without the end comment, and the leftover lines get a warning" || bad U15 "no warning about line 19: $(printf '%s' "$out" | grep -m1 repeat)"
+H=$(newhome u15b); { sed -n 1,6p "$PKG/CLAUDE.md"; printf "$BLOCK\n"; sed -n '7,$p' "$PKG/CLAUDE.md"; } > "$H/.claude/CLAUDE.md"; out=$(inst "$H")
+same "U15b with the end comment, the section runs to it: code block kept, no leftovers" "$H/.claude/CLAUDE.md" "$(printf "%s\n$BLOCK" "$SEC")"
+printf '%s' "$out" | grep -q 'repeat' && bad U15b "unexpected leftover warning" || ok "U15b no leftover warning"
+H=$(newhome u16); put "$H" '%s\n## Other\nkeep\n\n%s\n- extra\n' "$SEC" "$OLD"; inst "$H" >/dev/null
+same "U16 a later copy after another heading is merged, its own line kept in place" "$H/.claude/CLAUDE.md" "$(printf '%s\n## Other\nkeep\n\n- extra' "$SEC")"; idem U16 "$H"
+H=$(newhome u17); sed 's/^- .*/&  /' "$ORIG" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
+same "U17 package lines with trailing spaces are still recognized" "$H/.claude/CLAUDE.md" "$SEC"
 
-echo "== Code blocks around the section"
-H=$(newhome f1); printf '# Mine\n\n```bash\nx\n~~~ y\n```\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "F1 ~~~ inside a \`\`\` block doesn't hide the real section" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```bash\nx\n~~~ y\n```\n\n%s' "$SEC")"; idem F1 "$H"
+echo "== Code blocks don't change where the section is"
+H=$(newhome k1); put "$H" '# Notes\n```md\n```bash\nx\n```\n```\n\n%s\n' "$OLD"; inst "$H" >/dev/null
+same "K1 naively nested example before the section" "$H/.claude/CLAUDE.md" "$(printf '# Notes\n```md\n```bash\nx\n```\n```\n\n%s' "$SEC")"; idem K1 "$H"
+H=$(newhome k2); put "$H" '# Mine\n\n```bash\nx\n\n%s\n' "$OLD"; inst "$H" >/dev/null
+same "K2 a code block that's never closed before the section" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```bash\nx\n\n%s' "$SEC")"; idem K2 "$H"
+H=$(newhome k3); put "$H" '%s\n```bash\n# build it\nmake\n' "$OLD"; inst "$H" >/dev/null
+same "K3 a code block that's never closed after the section is kept" "$H/.claude/CLAUDE.md" "$(printf '%s\n```bash\n# build it\nmake' "$SEC")"; idem K3 "$H"
+H=$(newhome k4); put "$H" '# Mine\n\n```text\nStart blocks like:\n```python\n```\n\n%s\n' "$OLD"; inst "$H" >/dev/null
+same "K4 a fence shown as text inside a block" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```text\nStart blocks like:\n```python\n```\n\n%s' "$SEC")"
+H=$(newhome k5); put "$H" '# Mine\n```bash\nnpm test\n```bash\n\n%s\n## Build\n```\nmake\n```\n' "$OLD"; inst "$H" >/dev/null
+same "K5 a closing fence typed as \`\`\`bash before the section" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n```bash\nnpm test\n```bash\n\n%s\n## Build\n```\nmake\n```' "$SEC")"
 
-H=$(newhome f2); printf '# Mine\n\n```npm test``` runs the tests.\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null; inst "$H" >/dev/null
-f="$H/.claude/CLAUDE.md"; [ "$(heads "$f")" = 1 ] && ok "F2 a line starting with inline code isn't a fence" || bad F2 "headings after 2 runs: $(heads "$f")"; idem F2 "$H"
-H=$(newhome f2b); printf '# Mine\n\n```npm test``` runs the tests.\n\n## Claude Code subagents\n\n- old\n\n## Build\n\n```bash\nmake\n```\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "F2b inline-code line, real section and a later block: replaced in place" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```npm test``` runs the tests.\n\n%s\n\n## Build\n\n```bash\nmake\n```' "$SEC")"; idem F2b "$H"
-
-H=$(newhome f3); printf '# Mine\n\n````md\n```\n## Claude Code subagents\n```\n````\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "F3 \`\`\` inside a \`\`\`\` block doesn't close it" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n````md\n```\n## Claude Code subagents\n```\n````\n\n%s' "$SEC")"; idem F3 "$H"
-
-H=$(newhome f4); printf '## Claude Code subagents\n\n- old\n```\n~~~\n## not a heading (in code)\n```\n\n## Other\nkeep\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "F4 a code block after the old section is kept whole" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n```\n~~~\n## not a heading (in code)\n```\n\n## Other\nkeep' "$SEC")"; idem F4 "$H"
-
-H=$(newhome f5); printf '# Mine\n\n```text\nheading example\n~~~~\n```\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-f="$H/.claude/CLAUDE.md"; [ "$(heads "$f")" = 1 ] && ! grep -q '^- old' "$f" && ok "F5 longer ~~~~ inside a \`\`\` block doesn't close it" || bad F5 "heads=$(heads "$f")"
-
-H=$(newhome f6); printf '# Mine\n\n~~~ `md`\n## Claude Code subagents\n- example\n~~~\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "F6 ~~~ with backticks in its info string still opens a block" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n~~~ `md`\n## Claude Code subagents\n- example\n~~~\n\n%s' "$SEC")"
-H=$(newhome f7); printf '# Mine\n\n```md\n## Claude Code subagents\n- example\n```  \n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "F7 closing fence with trailing spaces closes the block" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```md\n## Claude Code subagents\n- example\n```  \n\n%s' "$SEC")"
-
-echo "== Nested and mistyped fences, code after the section"
-NEST='# Notes\nExample doc:\n```md\nRun this:\n```bash\nnpm test\n```\n```\n\n'
-H=$(newhome n1); printf "$NEST"'## Claude Code subagents\n- old\n## Commands\n```bash\nnpm run build\n```\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "N1 naively nested example before the section: replaced in place" "$H/.claude/CLAUDE.md" "$(printf "$NEST"'%s\n\n## Commands\n```bash\nnpm run build\n```' "$SEC")"; idem N1 "$H"
-H=$(newhome n2); printf '# Mine\n```bash\nnpm test\n```bash\n\n## Claude Code subagents\n- old\n## Commands\n```sh\nx\n```\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-f="$H/.claude/CLAUDE.md"; [ "$(heads "$f")" = 1 ] && ! grep -q '^- old' "$f" && grep -q '^## Commands' "$f" && ok "N2 closer typed with an info string: replaced in place" || bad N2 "heads=$(heads "$f")"; idem N2 "$H"
-H=$(newhome n3); printf '# T\n## Claude Code subagents\n- old\n\nExample:\n```md\n```bash\nx\n```\n```\n\n## Notes\nmy notes\n\n## Build\n```js\ny\n```\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "N3 naive nesting after the section: nothing after it is deleted" "$H/.claude/CLAUDE.md" "$(printf '# T\n%s\n\n```md\n```bash\nx\n```\n```\n\n## Notes\nmy notes\n\n## Build\n```js\ny\n```' "$SEC")"; idem N3 "$H"
-H=$(newhome n4); printf '# Notes\n## Claude Code subagents\n- old\n## Notes2\n```md\n## Claude Code subagents\n- example\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "N4 unclosed example at the end after the real section is kept" "$H/.claude/CLAUDE.md" "$(printf '# Notes\n%s\n\n## Notes2\n```md\n## Claude Code subagents\n- example' "$SEC")"
-H=$(newhome n5); printf '# Mine\n## Claude Code subagents\n- old\n```bash\n# build it\nmake\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "N5 unclosed block inside the old section is kept intact" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n%s\n\n```bash\n# build it\nmake' "$SEC")"; idem N5 "$H"
-H=$(newhome n6); printf '# Mine\n````md\n## Claude Code subagents\n- example\n```\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"
-refused "N6 heading only after an unclosed block: refused, names line 2, nothing installed" "$H" "starts on line 2 is never closed"
-H=$(newhome n7); printf '# Mine\n\n```bash\nx\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"
-refused "N7 stray fence before the section: refused" "$H" "never closed"; refused "N7 (again)" "$H" "never closed"
-H=$(newhome n8); printf '# Mine\n\n```bash\nx\n' > "$H/.claude/CLAUDE.md"
-refused "N8 stray fence, no section: refused in a dry run too" "$H" "never closed" --dry-run; refused "N8 (real run)" "$H" "never closed"
-H=$(newhome n9); printf '# Mine\n\n```md\n## Claude Code subagents\n- example\n```\n\n## Claude Code subagents\n\n- old\n\n```\nstray\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "N9 closed example kept, real section replaced, stray block after it kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```md\n## Claude Code subagents\n- example\n```\n\n%s\n\n```\nstray' "$SEC")"; idem N9 "$H"
-
-echo "== Fence lines that can be read two ways"
-H=$(newhome a1); printf '## Claude Code subagents\n\n- old rule\n\n## Team setup\n\n```md\nPaste this into CLAUDE.md:\n```markdown\n## Claude Code subagents\n- my team rule\n```\n```\n' > "$H/.claude/CLAUDE.md"
-refused "A1 real section, plus the heading inside a naively nested example: refused, names line 10" "$H" "around line 10 can be read two ways"
-H=$(newhome a2); printf '# Team\n\n```md\nPaste this:\n```markdown\n## Claude Code subagents\n- team example rule\n```\n```\n\n## Claude Code subagents\n\n- old rule\n' > "$H/.claude/CLAUDE.md"
-refused "A2 heading inside a nested example before the real one: refused" "$H" "can be read two ways"
-H=$(newhome a3); printf '# Mine\n```bash\nnpm test\n```bash\n\n## Claude Code subagents\n- old\n## Commands\n```sh\nx\n```\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "A3 closer typo, only one reading closes every block: that one is used" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n```bash\nnpm test\n```bash\n\n%s\n\n## Commands\n```sh\nx\n```' "$SEC")"; idem A3 "$H"
-H=$(newhome a4); printf '# Mine\n```bash\nnpm test\n```bash\n\n## Claude Code subagents\n- old\n## Commands\n```\nx\n```\n' > "$H/.claude/CLAUDE.md"
-refused "A4 closer typo where both readings close every block: refused" "$H" "can be read two ways"
-H=$(newhome a5); printf '# Mine\n\n```md\n```npm test``` runs the tests\n## Claude Code subagents\n- example\n```\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "A5 inline code inside a block doesn't close it" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```md\n```npm test``` runs the tests\n## Claude Code subagents\n- example\n```\n\n%s' "$SEC")"
-H=$(newhome a6); printf '## Claude Code subagents\n- old\n\n## Notes\n```md\n```npm test``` runs the tests\n## Claude Code subagents\n- example\n```\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "A6 an example after the real section isn't cut short" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n## Notes\n```md\n```npm test``` runs the tests\n## Claude Code subagents\n- example\n```' "$SEC")"
-H=$(newhome a7); printf '1. Run:\n   ```bash\n   make\n   ```\n- Or:\n    ```bash\n    x\n    ```\n\n## Claude Code subagents\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "A7 fences indented in lists (3 and 4 spaces)" "$H/.claude/CLAUDE.md" "$(printf '1. Run:\n   ```bash\n   make\n   ```\n- Or:\n    ```bash\n    x\n    ```\n\n%s' "$SEC")"
-
-echo "== The end-of-section comment"
-[ "$(tail -1 "$PKG/CLAUDE.md")" = "$MARK" ] && ok "M0 the package section ends with the end-of-section comment" || bad M0 "no end marker"
-H=$(newhome m1); printf '# Mine\n\n## Claude Code subagents\n\n- old\n%s\n- Use pnpm, never npm.\n@docs/conventions.md\n' "$MARK" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "M1 bullets and @imports right after the end comment are kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s\n- Use pnpm, never npm.\n@docs/conventions.md' "$SEC")"; idem M1 "$H"
-H=$(newhome m2); rmdir "$H/.claude"; inst "$H" >/dev/null; printf -- '- Added later by Claude.\n' >> "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "M2 a line appended after a fresh install survives the next run" "$H/.claude/CLAUDE.md" "$(printf '%s\n- Added later by Claude.' "$SEC")"
-H=$(newhome m3); printf '# Mine\n\n## Claude Code subagents\n\n- old\n\n### My extra routing\n- Use the db agent for SQL.\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "M3 no end comment yet: a ### subsection after the section is kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s\n\n### My extra routing\n- Use the db agent for SQL.' "$SEC")"; idem M3 "$H"
-H=$(newhome m4); printf '## Claude Code subagents\n- old\n```md\n%s\n```\nmine\n' "$MARK" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "M4 an end comment inside a code block doesn't count" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n```md\n%s\n```\nmine' "$SEC" "$MARK")"
-H=$(newhome m5); printf '## Claude Code subagents\n- old\n%s\nkeep 1\n\n## Claude Code subagents\n- old 2\n%s\nkeep 2\n' "$MARK" "$MARK" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "M5 two marked copies: merged into one, text after each kept" "$H/.claude/CLAUDE.md" "$(printf '%s\nkeep 1\n\nkeep 2' "$SEC")"; idem M5 "$H"
-H=$(newhome m6); printf '## Claude Code subagents\n- old\n\n## Next\n- mine\n%s\n' "$MARK" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "M6 an end comment after another heading isn't this section's" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n## Next\n- mine\n%s' "$SEC" "$MARK")"
-H=$(newhome m6b); printf '## Claude Code subagents\n- old\n### Mine\n- keep\n%s\n' "$MARK" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "M6b a heading of yours inside a marked section is kept" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n### Mine\n- keep\n%s' "$SEC" "$MARK")"; idem M6b "$H"
-H=$(newhome m7); printf '\357\273\277## Claude Code subagents\r\n- old\r\n%s\r\nkeep\r\n' "$MARK" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null; f="$H/.claude/CLAUDE.md"
-[ "$(head -c 3 "$f" | od -An -tx1 | tr -d ' \n')" = efbbbf ] && [ "$(grep -c "$MARK" "$f")" = 1 ] && grep -q $'^keep\r$' "$f" && [ "$(grep -c $'\r\r' "$f")" = 0 ] && ok "M7 BOM + CRLF with an end comment" || bad M7 "marks=$(grep -c "$MARK" "$f")"; idem M7 "$H"
-for t in '# x' '#\tx' '### x' '***' '___' '--- ' '##'; do
-  H=$(newhome "mt$(printf '%s' "$t" | cksum | cut -d' ' -f1)"); printf "## Claude Code subagents\n- old\n$t\nmine\n" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-  same "M8 no end comment: '$t' ends the section and what follows is kept" "$H/.claude/CLAUDE.md" "$(printf "%s\n\n$t\nmine" "$SEC")"
+echo "== Headings that aren't this package's section"
+H=$(newhome w1); put "$H" '# Mine\n\n```md\n## Claude Code subagents\n- my team rule\n```\n'; out=$(inst "$H")
+same "W1 an example with the heading: section appended, example untouched" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```md\n## Claude Code subagents\n- my team rule\n```\n\n%s' "$SEC")"
+printf '%s' "$out" | grep -q 'line 4 .*left alone' && ok "W1 warns about line 4" || bad W1 "no warning naming line 4"
+out=$(inst "$H"); printf '%s' "$out" | grep -q 'unchanged .*CLAUDE.md' && printf '%s' "$out" | grep -q 'line 4 .*left alone' && ok "W1 rerun: unchanged, still warns" || bad W1 "rerun"
+H=$(newhome w2); put "$H" '# Mine\n\n```md\n## Claude Code subagents\n- my team rule\n```\n\n%s\n' "$OLD"; out=$(inst "$H")
+same "W2 real section replaced, the example left alone" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n```md\n## Claude Code subagents\n- my team rule\n```\n\n%s' "$SEC")"
+printf '%s' "$out" | grep -q 'line 4 .*left alone' && ok "W2 warns about the example" || bad W2 "no warning"
+H=$(newhome w3); put "$H" '## Claude Code subagents\n\n- old routing to Plan\n'; out=$(inst "$H")
+same "W3 a section with none of this package's lines is kept, the section appended" "$H/.claude/CLAUDE.md" "$(printf '## Claude Code subagents\n\n- old routing to Plan\n\n%s' "$SEC")"
+printf '%s' "$out" | grep -q 'line 1 .*left alone' && ok "W3 warns about line 1" || bad W3 "no warning"
+H=$(newhome w4); put "$H" '### Claude Code subagents\n- a\n## Claude Code subagents and more\n- b\n  ## Claude Code subagents\n- c\n'; out=$(inst "$H")
+same "W4 ###, longer and indented headings aren't the section" "$H/.claude/CLAUDE.md" "$(printf '### Claude Code subagents\n- a\n## Claude Code subagents and more\n- b\n  ## Claude Code subagents\n- c\n\n%s' "$SEC")"
+printf '%s' "$out" | grep -q 'left alone' && bad W4 "unexpected warning" || ok "W4 no warning for them"
+H=$(newhome w5); put "$H" '%s\n\n```md\n## Claude Code subagents\n- my team rule\n```\n' "$OLD"; out=$(inst "$H"); f="$H/.claude/CLAUDE.md"
+same "W5 an example after the real section is left alone" "$f" "$(printf '%s\n\n```md\n## Claude Code subagents\n- my team rule\n```' "$SEC")"; idem W5 "$H"
+n=$(grep -n '^## Claude Code subagents$' "$f" | sed -n 2p | cut -d: -f1)
+printf '%s' "$out" | grep -q "line $n .*left alone" && ok "W5 the warning names the example's line in the updated file ($n)" || bad W5 "warning doesn't name line $n: $(printf '%s' "$out" | grep -m1 'left alone')"
+H=$(newhome w6); put "$H" '## Claude Code subagents\n- my own note\n%s\n' "$MARK"; out=$(inst "$H")
+same "W6 a heading over only an end comment isn't an installed copy" "$H/.claude/CLAUDE.md" "$(printf '## Claude Code subagents\n- my own note\n%s\n\n%s' "$MARK" "$SEC")"; idem W6 "$H"
+H=$(newhome w7); put "$H" '## Workflow\n\n### Claude Code subagents\n%s\n' "$OLD_BODY"; out=$(inst "$H")
+printf '%s' "$out" | grep -q 'line 5 and 9 more repeat' && ok "W7 package lines under an edited heading get a warning" || bad W7 "no warning: $(printf '%s' "$out" | grep -m1 'repeat\|warning')"
+# A section heading with none of the package's lines right under it must not take the lines of an
+# edited copy further down, even across a ### heading or up to that copy's end comment.
+for c in \
+  "W8|# Mine\n\n<!--\n## Claude Code subagents\n- Old routing I turned off.\n-->\n\n### Claude Code subagents\n\n%s\n|$(sed 1,2d "$ORIG")" \
+  "W9|## Workflow\n\nTeam doc format:\n\`\`\`md\n## Claude Code subagents\n- your rules here\n\`\`\`\n\n### Claude Code subagents\n%s\n|$OLD_BODY" \
+  "W10|# Notes\n\`\`\`md\n## Claude Code subagents\n- my rule\n\`\`\`\n\n# Workflow\n### Claude Code subagents\n%s\n\n## After\ny\n|$(sed 1,2d "$PKG/CLAUDE.md")"; do
+  name="${c%%|*}"; rest="${c#*|}"; fmt="${rest%%|*}"; arg="${rest#*|}"
+  H=$(newhome "$name"); put "$H" "$fmt" "$arg"; before="$(cat "$H/.claude/CLAUDE.md")"; out=$(inst "$H")
+  same "$name a commented-out or example heading above an edited copy: both left alone, section appended" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n%s' "$before" "$SEC")"
+  printf '%s' "$out" | grep -q 'left alone' && printf '%s' "$out" | grep -q 'repeat' && ok "$name warns about both" || bad "$name" "missing warning"
 done
 
-echo "== Refusals stop the whole install"
-H=$(newhome x1); printf '# Mine\n\n```bash\nx\n' > "$H/.claude/CLAUDE.md"; mkdir -p "$H/.claude/agents"; printf -- '---\nname: Plan\n---\n' > "$H/.claude/agents/plan.md"
-refused "X1 nothing is installed or retired when CLAUDE.md is refused" "$H" "never closed"
-H=$(newhome x2); out=$(inst "$H"); rc=$?; [ $rc = 0 ] && printf '%s' "$out" | grep -q '^Done' && ok "X2 a normal install still exits 0 and says Done" || bad X2 "rc=$rc"
-
-echo "== Heading variants"
-H=$(newhome h1); printf '# Mine\n\n## Claude Code subagents  \n\n- old\n\n## Other\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "H1 heading with trailing spaces is replaced" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s\n\n## Other' "$SEC")"; idem H1 "$H"
-H=$(newhome h2); printf '## Claude Code subagents ##\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "H2 heading with closing ## is replaced" "$H/.claude/CLAUDE.md" "$SEC"; idem H2 "$H"
-H=$(newhome h3); printf '\357\273\277## Claude Code subagents\n\n- old\n\n## Other\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-f="$H/.claude/CLAUDE.md"; [ "$(head -c 3 "$f" | od -An -tx1 | tr -d ' \n')" = efbbbf ] && [ "$(grep -c 'Claude Code subagents' "$f")" = 1 ] && ! grep -q '^- old' "$f" && ok "H3 BOM before the heading: replaced, BOM kept" || bad H3 "count=$(grep -c 'Claude Code subagents' "$f")"; idem H3 "$H"
-H=$(newhome h4); printf '#  Not it\n\n### Claude Code subagents\n\n- keep me\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-f="$H/.claude/CLAUDE.md"; grep -q '^- keep me' "$f" && grep -q '^### Claude Code subagents' "$f" && ok "H4 a ### heading with the same text isn't the section" || bad H4 "### section touched"
-H=$(newhome h5); printf '## Claude Code subagents and more\n\n- keep me\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-grep -q '^- keep me' "$H/.claude/CLAUDE.md" && ok "H5 a longer heading isn't the section" || bad H5 "longer heading touched"
-H=$(newhome h6); printf '## Claude  Code\tsubagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "H6 extra spaces and a tab inside the heading" "$H/.claude/CLAUDE.md" "$SEC"
-H=$(newhome h7); printf '# Mine\n  ## Claude Code subagents\n  - old\n  ## Other\n  keep\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-f="$H/.claude/CLAUDE.md"; grep -q '^  ## Other' "$f" && grep -q '^  keep' "$f" && grep -q '^  - old' "$f" && ok "H7 an indented heading isn't matched, so nothing indented is deleted" || bad H7 "indented content changed"
-H=$(newhome h8); printf '## Claude Code subagents\n- old\n##\tMine\nmine\n#\tTop\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
-same "H8 headings with a tab after # end the section" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n##\tMine\nmine\n#\tTop' "$SEC")"
+echo "== The package's own CLAUDE.md"
+PB="$T/pkgblank"; cp -R "$PKG" "$PB"; printf '\n\n' >> "$PB/CLAUDE.md"
+H=$(newhome p2); rmdir "$H/.claude"; inst "$H" "$PB" >/dev/null; inst "$H" "$PB" >/dev/null
+same "P2 trailing blank lines in the package section are ignored" "$H/.claude/CLAUDE.md" "$SEC"
+PH="$T/pkghead"; cp -R "$PKG" "$PH"; awk 'NR == 3 { print "### Notes" } { print }' "$PKG/CLAUDE.md" > "$PH/CLAUDE.md"
+H=$(newhome p3); put "$H" '# Mine\n'; refused "P3 a package section with another heading: refused before any change" "$H" "package's CLAUDE.md" "$PH"
+PM="$T/pkgnomark"; cp -R "$PKG" "$PM"; sed '$d' "$PKG/CLAUDE.md" > "$PM/CLAUDE.md"
+H=$(newhome p4); put "$H" '# Mine\n'; refused "P4 a package section without the end comment: refused" "$H" "package's CLAUDE.md" "$PM"
+PE="$T/pkgmidmark"; cp -R "$PKG" "$PE"; awk -v m="$MARK" 'NR == 6 { print m } { print }' "$PKG/CLAUDE.md" > "$PE/CLAUDE.md"
+H=$(newhome p6); put "$H" '# Mine\n'; refused "P6 a package section with an end comment in the middle: refused" "$H" "package's CLAUDE.md" "$PE"
+# Rewording a line the way README describes: save the current section in old-sections/ first
+PW="$T/pkgreword"; cp -R "$PKG" "$PW"; mkdir -p "$PW/old-sections"; cp "$PKG/CLAUDE.md" "$PW/old-sections/previous.md"
+sed '5s/.*/- A reworded rule./' "$PKG/CLAUDE.md" > "$PW/CLAUDE.md"
+H=$(newhome p5); put "$H" '%s\n- mine\n' "$OLD"; inst "$H" "$PW" >/dev/null
+same "P5 a reworded line: the old wording is still recognized through old-sections/" "$H/.claude/CLAUDE.md" "$(printf '%s\n- mine' "$(cat "$PW/CLAUDE.md")")"
+[ ! -d "$PKG/old-sections" ] && ok "P5 the package ships no old-sections/ folder until a line is reworded" || bad P5 "old-sections/ exists"
 
 echo "== Windows line endings and byte order marks in the package"
 CR="$T/pkgcr"; cp -R "$PKG" "$CR"; awk '{ printf "%s\r\n", $0 }' "$PKG/CLAUDE.md" > "$CR/CLAUDE.md"
-H=$(newhome c1); printf '# Mine\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" "$CR" >/dev/null
+H=$(newhome c1); put "$H" '# Mine\n\n%s\n' "$OLD"; inst "$H" "$CR" >/dev/null
 f="$H/.claude/CLAUDE.md"; [ "$(grep -c $'\r' "$f")" = 0 ] && ok "C1 CRLF section into an LF file: no CRs" || bad C1 "$(grep -c $'\r' "$f") lines with CR"
 a=$(sum "$f"); inst "$H" "$CR" >/dev/null; [ "$a" = "$(sum "$f")" ] && [ "$(heads "$f")" = 1 ] && ok "C1 (idempotent)" || bad "C1 (idempotent)" "heads=$(heads "$f")"
-H=$(newhome c2); printf '# Mine\r\n\r\n## Claude Code subagents\r\n\r\n- old\r\n' > "$H/.claude/CLAUDE.md"; inst "$H" "$CR" >/dev/null
+H=$(newhome c2); awk '{ printf "%s\r\n", $0 }' "$ORIG" > "$H/.claude/CLAUDE.md"; inst "$H" "$CR" >/dev/null
 f="$H/.claude/CLAUDE.md"; [ "$(grep -c $'\r\r' "$f")" = 0 ] && [ "$(wc -l < "$f" | tr -d ' ')" = "$(grep -c $'\r$' "$f")" ] && ok "C2 CRLF section into a CRLF file: single CRs" || bad C2 "double CRs: $(grep -c $'\r\r' "$f")"
 a=$(sum "$f"); inst "$H" "$CR" >/dev/null; [ "$a" = "$(sum "$f")" ] && [ "$(heads "$f")" = 1 ] && ok "C2 (idempotent)" || bad "C2 (idempotent)" "heads=$(heads "$f")"
 H=$(newhome c3); rmdir "$H/.claude"; inst "$H" "$CR" >/dev/null; f="$H/.claude/CLAUDE.md"
@@ -188,10 +179,8 @@ H=$(newhome c3); rmdir "$H/.claude"; inst "$H" "$CR" >/dev/null; f="$H/.claude/C
 H=$(newhome c4); printf '# Mine\r\n' > "$H/.claude/CLAUDE.md"; inst "$H" "$CR" >/dev/null; f="$H/.claude/CLAUDE.md"
 [ "$(grep -c $'\r\r' "$f")" = 0 ] && [ "$(wc -l < "$f" | tr -d ' ')" = "$(grep -c $'\r$' "$f")" ] && ok "C4 CRLF section appended to a CRLF file: single CRs" || bad C4 "double CRs: $(grep -c $'\r\r' "$f")"
 [ -f "$PKG/.gitattributes" ] && grep -q 'eol=lf' "$PKG/.gitattributes" && ok "C5 .gitattributes forces LF" || bad C5 "no .gitattributes with eol=lf"
-H=$(newhome c6); printf '# Mine\r\n\r\n## Claude Code subagents\r\r\n- old\r\r\n\r\n## Claude Code subagents\r\r\n- old\r\r\n\r\n## Other\r\n' > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null; f="$H/.claude/CLAUDE.md"
-[ "$(heads "$f")" = 1 ] && [ "$(grep -c $'\r\r' "$f")" = 0 ] && grep -q '^## Other' "$f" && ok "C6 sections with \\r\\r line endings from older versions are repaired and merged" || bad C6 "heads=$(heads "$f") dbl=$(grep -c $'\r\r' "$f")"; idem C6 "$H"
 BM="$T/pkgbom"; cp -R "$PKG" "$BM"; { printf '\357\273\277'; cat "$PKG/CLAUDE.md"; } > "$BM/CLAUDE.md"
-H=$(newhome c7); printf '# Mine\n\n## Claude Code subagents\n\n- old\n' > "$H/.claude/CLAUDE.md"; inst "$H" "$BM" >/dev/null; inst "$H" "$BM" >/dev/null
+H=$(newhome c7); put "$H" '# Mine\n\n%s\n' "$OLD"; inst "$H" "$BM" >/dev/null; inst "$H" "$BM" >/dev/null
 same "C7 BOM in the package's CLAUDE.md isn't copied mid-file" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s' "$SEC")"
 H=$(newhome c8); rmdir "$H/.claude"; inst "$H" "$BM" >/dev/null; inst "$H" "$BM" >/dev/null
 same "C8 BOM in the package: new CLAUDE.md has none, rerun unchanged" "$H/.claude/CLAUDE.md" "$SEC"
@@ -223,13 +212,29 @@ H=$(newhome r8); out=$(inst "$H"); printf '%s' "$out" | grep -q 'matched by thei
 
 echo "== Finding the section in --project mode"
 P=$T/proj1; rm -rf "$P"; mkdir -p "$P/.claude"; H=$(newhome hs1)
-printf '# Proj\n\n```md\n## Claude Code subagents\n```\n' > "$P/CLAUDE.md"; printf '## Claude Code subagents\n\n- old\n' > "$P/.claude/CLAUDE.md"; a=$(sum "$P/CLAUDE.md")
+printf '# Proj\n\n```md\n## Claude Code subagents\n- example\n```\n' > "$P/CLAUDE.md"; printf '%s\n' "$OLD" > "$P/.claude/CLAUDE.md"; a=$(sum "$P/CLAUDE.md")
 (cd "$P" && inst "$H" "" --project >/dev/null)
-[ "$a" = "$(sum "$P/CLAUDE.md")" ] && ! grep -q '^- old' "$P/.claude/CLAUDE.md" && ok "S1 --project picks the file with the real section" || bad S1 "wrong file updated"
-P=$T/proj2; rm -rf "$P"; mkdir -p "$P"; H=$(newhome hs2); printf '# Proj\n\n```md\n## Claude Code subagents\n```\n' > "$P/CLAUDE.md"
-out=$(cd "$P" && inst "$H"); printf '%s' "$out" | grep -q 'also has' && bad S2 "false duplicate warning" || ok "S2 no duplicate warning for a fenced example"
-P=$T/proj3; rm -rf "$P"; mkdir -p "$P"; H=$(newhome hs3); printf '# Proj\n\n## Claude Code subagents\n\n- old\n' > "$P/CLAUDE.md"
+[ "$a" = "$(sum "$P/CLAUDE.md")" ] && same "S1 --project picks the file with the real section" "$P/.claude/CLAUDE.md" "$SEC" || bad S1 "./CLAUDE.md changed"
+P=$T/proj2; rm -rf "$P"; mkdir -p "$P"; H=$(newhome hs2); printf '# Proj\n\n```md\n## Claude Code subagents\n- example\n```\n' > "$P/CLAUDE.md"
+out=$(cd "$P" && inst "$H"); printf '%s' "$out" | grep -q 'also has' && bad S2 "false duplicate warning" || ok "S2 no duplicate warning for an example"
+P=$T/proj3; rm -rf "$P"; mkdir -p "$P"; H=$(newhome hs3); printf '# Proj\n\n%s\n' "$OLD" > "$P/CLAUDE.md"
 out=$(cd "$P" && inst "$H"); printf '%s' "$out" | grep -q 'proj3/CLAUDE.md also has' && ok "S3 duplicate warning for a real section elsewhere" || bad S3 "no warning"
+P=$T/proj5; rm -rf "$P"; mkdir -p "$P"; H=$(newhome hs5); printf '# Proj\n\n## Claude Code subagents\n\n- Old routing to the Plan agent.\n' > "$P/CLAUDE.md"
+out=$(cd "$P" && inst "$H"); printf '%s' "$out" | grep -q 'proj5/CLAUDE.md has a "Claude Code subagents" heading too' && ok "S5 warning for an edited copy in another CLAUDE.md" || bad S5 "no warning"
+P=$T/proj6; rm -rf "$P"; mkdir -p "$P/.claude"; H=$(newhome hs6); printf '# Proj\n\n- Use pnpm.\n' > "$P/CLAUDE.md"; sed 's/^- /* /' "$ORIG" > "$P/.claude/CLAUDE.md"; a=$(sum "$P/CLAUDE.md")
+(cd "$P" && inst "$H" "" --project >/dev/null)
+[ "$a" = "$(sum "$P/CLAUDE.md")" ] && [ "$(heads "$P/.claude/CLAUDE.md")" = 2 ] && ok "S6 --project picks the file with an edited copy, not the one without" || bad S6 "picked ./CLAUDE.md"
+
+echo "== Refusals stop the whole install"
+if [ "$(id -u)" != 0 ]; then
+  H=$(newhome x1); put "$H" '# Mine\n'; mkdir -p "$H/.claude/agents"; printf -- '---\nname: Plan\n---\n' > "$H/.claude/agents/plan.md"; chmod a-w "$H/.claude/CLAUDE.md"
+  refused "X1 a read-only CLAUDE.md that needs a change: refused before anything is installed or retired" "$H" "can't write"; chmod u+w "$H/.claude/CLAUDE.md"
+  H=$(newhome x3); rmdir "$H/.claude"; inst "$H" >/dev/null; rm "$H/.claude/agents/builder.md"; chmod a-w "$H/.claude/CLAUDE.md"; out=$(inst "$H"); rc=$?; chmod u+w "$H/.claude/CLAUDE.md"
+  [ $rc = 0 ] && [ -f "$H/.claude/agents/builder.md" ] && printf '%s' "$out" | grep -q 'unchanged .*CLAUDE.md' && ok "X3 a read-only CLAUDE.md that's already current: install goes ahead" || bad X3 "rc=$rc $(printf '%s' "$out" | grep -m1 error)"
+else
+  echo "skip X1, X3 read-only CLAUDE.md (running as root)"
+fi
+H=$(newhome x2); out=$(inst "$H"); rc=$?; [ $rc = 0 ] && printf '%s' "$out" | grep -q '^Done' && ok "X2 a normal install exits 0 and says Done" || bad X2 "rc=$rc"
 
 echo "== Temp folder, dry run, permissions"
 H=$(newhome d1); rmdir "$H/.claude"; inst "$H" "" --dry-run >/dev/null; [ ! -e "$H/.claude" ] && ok "D1 --dry-run on a fresh HOME creates nothing" || bad D1 "created $(find "$H" | head -3)"

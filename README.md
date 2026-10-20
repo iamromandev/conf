@@ -84,11 +84,14 @@ The script:
 - Moves anything it replaces to `.claude/claude-conf-backup-<timestamp>/`. Nothing is deleted.
 - Retires older versions of these agents and skills (`plan.md`, `build.md`, `review.md`, `spec.md`, `explore.md`, and the `brainstorming`, `systematic-debugging`, `verify-before-done` and `test-driven-development` skills) to the same backup folder. A file at one of those paths is retired if the `name:` in its frontmatter is the old one (`Plan` for `agents/plan.md`, `review` for `agents/review.md`, and so on), so an agent or skill of your own at that path with that name is retired too. `--dry-run` lists them. To keep one, give it another file or folder name, e.g. `agents/my-review.md`; just moving it back from the backup doesn't last, since the next run retires it again.
 - Replaces the "Claude Code subagents" section of CLAUDE.md and leaves the rest alone, or adds the section at the end if it's missing. It prints a diff of the change and saves the previous file as `CLAUDE.md.bak-<timestamp>`.
-  - The section ends with a `<!-- claude-conf: end of section -->` comment (Claude Code drops HTML comments, so it costs nothing). Everything from the heading to that comment is replaced, and anything you add after it is kept. A heading of yours between the two is kept too, along with everything after it.
-  - A section without the comment, from an older version, is taken to run to the next heading of any level, `---`, `***` or `___` line, or code block (the section has none, so a code block there is yours and is kept). A bullet or `@import` right after it is replaced along with it, so check the diff in `--dry-run` the first time. Headings inside code blocks don't count.
-  - If it can't tell safely where the section is, it stops before changing anything, agents and skills included, and names the line to fix. That happens when a code block is never closed and no section comes before it, or when nested code-block fences (```` ```bash ```` inside ```` ```md ````) can be read two ways around a "Claude Code subagents" heading.
+  - It recognizes the section by its content: the heading, followed by lines from this package's section. Every line the first release installed is still in the current section, so sections from any release are recognized. Code blocks around it don't matter.
+  - Only the package's own lines are replaced. Any other line under the old section, such as a bullet or `@import` you added, a rule you edited or a `###` subsection, is kept where it is, so it ends up after the new section. Several copies of the section are merged into one.
+  - The section now ends with a `<!-- claude-conf: end of section -->` comment (Claude Code drops HTML comments, so it costs nothing), and the old section is taken to run to that comment. Without it (a section installed by the first release), it runs to the next `#` or `##` heading, and a `#` line inside a code block counts too.
+  - It warns about lines of the package's section it finds outside the section, such as old bullets under a heading you edited or after a `#` line, so you can delete leftovers.
+  - A "Claude Code subagents" heading with none of the package's lines under it, such as a much older or heavily edited copy or an example of yours, is left alone. The section is added as usual, and the script warns about that line on every run until you delete or rename it.
+  - If CLAUDE.md needs a change but it or its folder isn't writable, it stops before changing anything, agents and skills included.
   - With `--project`, it uses `./CLAUDE.md`, or `./.claude/CLAUDE.md` if that's where the project keeps it.
-- Warns if another CLAUDE.md it can see (yours in `~/.claude`, or the current folder's) also has the section, since Claude Code loads all of them.
+- Warns if another CLAUDE.md it can see (yours in `~/.claude`, or the current folder's) also has the section, or an older or edited copy of it, since Claude Code loads all of them.
 - Warns if the superpowers plugin is still enabled in your settings. Uninstall it with `/plugin` in Claude Code; its brainstorming and debugging skills overlap with `scope` and `inspect`.
 
 Running it again is safe: unchanged files are reported as unchanged.
@@ -98,6 +101,8 @@ Running it again is safe: unchanged files are reported as unchanged.
 ### Editing the files
 
 If you change an agent's or skill's `description`, keep it plain, unquoted text that starts with a letter. Avoid ` #`: YAML reads it as the start of a comment, so the rest of the description is silently dropped. Avoid a colon followed by a space (e.g. "step by step: write…") or at the end, too, which isn't valid YAML. If you need either, wrap the description in single quotes and double any apostrophe inside (`it''s`). Don't wrap it in double quotes: `explorer`'s and `scope`'s descriptions contain double quotes, so the frontmatter would stop parsing. Claude Code then skips the agent, or loads the skill without a description.
+
+`CLAUDE.md` must start with the `## Claude Code subagents` heading, end with the end-of-section comment, and have no other headings or end-of-section comments; the installer stops if it doesn't. The installer recognizes an installed section by its lines, so before you reword or remove a line, save the current `CLAUDE.md` in an `old-sections/` folder next to it (e.g. as `old-sections/2026-11.md`). The installer reads every file there, so installs of the old wording are still recognized and updated, instead of being kept as your own lines.
 
 ### Manual install
 
@@ -109,7 +114,7 @@ Move the files back from `.claude/claude-conf-backup-<timestamp>/` (in `~/.claud
 
 ## Tests
 
-`tests/regress.sh` runs `install.sh` through about 120 checks: fresh installs and re-runs, `--dry-run`, `--project`, retiring old names, and CLAUDE.md edge cases such as code blocks around the section, the end-of-section comment, Windows line endings and byte order marks. It compares the resulting files byte for byte.
+`tests/regress.sh` runs `install.sh` through about 120 checks: fresh installs and re-runs, `--dry-run`, `--project`, retiring old names, upgrading a section installed by the first release with your own lines around and inside it, and CLAUDE.md edge cases such as code blocks, other "Claude Code subagents" headings, Windows line endings and byte order marks. It compares the resulting files byte for byte.
 
 ```bash
 bash tests/regress.sh
