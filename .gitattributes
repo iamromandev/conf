@@ -1,0 +1,2 @@
+# Keep LF line endings on every platform: bash can't run install.sh with CRLF line endings
+* text=auto eol=lf
