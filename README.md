@@ -49,10 +49,16 @@ before saying "done"       → check
 
 Needs bash, so macOS, Linux, or Git Bash/WSL on Windows. If you get "permission denied", run the script with `bash` in front, e.g. `bash install.sh`.
 
+Get the package first. The commands below assume it's in `~/claude-conf`:
+
+```bash
+git clone https://github.com/iamromandev/conf.git ~/claude-conf
+```
+
 For all projects (`~/.claude`):
 
 ```bash
-cd ~/Downloads/claude-conf
+cd ~/claude-conf
 ./install.sh --dry-run    # preview, including a diff of CLAUDE.md
 ./install.sh
 ```
@@ -61,11 +67,17 @@ For one project (its `.claude/` folder and CLAUDE.md), run it from the project's
 
 ```bash
 cd /path/to/your/project
-~/Downloads/claude-conf/install.sh --project --dry-run
-~/Downloads/claude-conf/install.sh --project
+~/claude-conf/install.sh --project --dry-run
+~/claude-conf/install.sh --project
 ```
 
 Start a new Claude Code session afterwards to load the changes.
+
+To update later, pull the latest version and run the installer again the same way:
+
+```bash
+git -C ~/claude-conf pull
+```
 
 The script:
 - Copies the agents and skills, skipping any that are already identical.
