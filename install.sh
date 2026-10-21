@@ -197,6 +197,7 @@ say() {
       updated) verb="would update" ;;
       appended) verb="would append" ;;
       created) verb="would create" ;;
+      retired) verb="would retire" ;;
     esac
   fi
   printf '%-14s %s\n' "$verb" "$*"
@@ -287,6 +288,14 @@ for f in "$SRC"/agents/*.md; do
   run mkdir -p "$DEST/agents"
   run cp "$f" "$target"
   say installed "$rel"
+done
+
+# Agents this package used to ship, now skills: moved to the backup folder, so Claude Code stops
+# loading them next to the skills that replace them
+for name in builder planner specifier; do
+  [ -f "$DEST/agents/$name.md" ] || continue
+  backup "$DEST/agents/$name.md"
+  say retired "agents/$name.md (now a skill)"
 done
 
 # Skills

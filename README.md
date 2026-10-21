@@ -9,9 +9,6 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 | Agent | Model | Effort | Tools | Use it for |
 |---|---|---|---|---|
 | `explorer` | haiku | low | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
-| `specifier` | sonnet | medium | read-only, plus writing the spec file | Writing agreed scope up as a testable spec |
-| `planner` | sonnet | medium | read-only | A step-by-step implementation plan for a non-trivial change |
-| `builder` | sonnet | medium | all except Agent | Carrying out a plan or review findings test-first, running builds, tests and linters |
 | `reviewer` | sonnet | medium | read-only | Reviewing a non-trivial change for bugs, security and design issues |
 
 "Read-only" for agents with Bash is an instruction in the prompt, not enforced by permissions.
@@ -20,30 +17,32 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 
 | Skill | What it does |
 |---|---|
-| `scope` | Talks a vague idea through with you, one question at a time, until the scope is agreed, then hands off to `specifier` |
+| `scope` | Talks a vague idea through with you, one question at a time, until the scope is agreed, then hands off to `spec` |
+| `spec` | Writes agreed scope up as a testable spec, then hands off to `blueprint` |
+| `blueprint` | A step-by-step implementation plan for a non-trivial change, then hands off to `build` |
+| `build` | Carries out a plan or review findings test-first, running builds, tests and linters |
 | `inspect` | Systematic debugging: reproduce, find the root cause with evidence, then fix with a failing test first |
 | `tdd` | Test-driven development: red, green, refactor |
 | `check` | Run the real checks and read the output before claiming anything is done, fixed or passing |
 
 ### `CLAUDE.md`
 
-A "Claude Code subagents" section that tells the main conversation when to use each agent and skill, and what to pass between them. Subagents load CLAUDE.md too (except the built-in `Explore` and `Plan`), so it also tells them to do their own task and report back instead of following the routing themselves.
+A "Claude Code subagents" section that tells the main conversation when to use each agent and skill, and what to pass between them. `spec`, `blueprint` and `build` were agents (`specifier`, `planner`, `builder`); as skills they run one after another in the main conversation, which skips each agent's cold start and re-reading, and lets them ask you questions directly. Subagents load CLAUDE.md too (except the built-in `Explore` and `Plan`), so it also tells them to do their own task and report back instead of following the routing themselves.
 
 ## Workflow
 
 ```
 small, obvious change      → do it directly
-vague request              → scope (with you) → specifier → planner → builder → reviewer
-clear, non-trivial change  → planner → builder → reviewer
-something broken           → inspect → small fix directly, or planner → builder → reviewer
-reviewer requests changes  → builder → reviewer again (max 1 round)
+vague request              → scope (with you) → spec → blueprint → build → reviewer
+clear, non-trivial change  → blueprint → build → reviewer
+something broken           → inspect → small fix directly, or blueprint → build → reviewer
+reviewer requests changes  → build → reviewer again (max 1 round)
 before saying "done"       → check
 ```
 
-- Subagents can't ask you questions. `specifier` and `planner` mark questions that would change the scope or plan as BLOCKING, and Claude asks you those before going on.
-- `builder` gets the plan verbatim, plus the spec's acceptance criteria when there is one.
-- `reviewer` gets the plan, `builder`'s report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
-- If `reviewer` requests changes, its findings go back to `builder`. After 1 round Claude stops and reports to you.
+- `scope`, `spec`, `blueprint` and `build` run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
+- `reviewer` is still a subagent, so it reviews the change with fresh eyes. It gets the plan, the build report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
+- If `reviewer` requests changes, Claude fixes its findings with `build`. After 1 round Claude stops and reports to you.
 
 ## Install
 
@@ -81,8 +80,11 @@ git -C ~/conf pull
 
 **Installs from before `spec-writer` was renamed to `specifier`** (they have `.claude/agents/spec-writer.md`) aren't upgraded cleanly. The installer updates the section but keeps its two old lines that name `spec-writer`, after the new section, and leaves `agents/spec-writer.md` in place, so Claude Code loads both agents. To upgrade one, run the installer, then delete the two `spec-writer` lines it leaves right after the `<!-- conf: end of section -->` comment (the diff it prints shows them), the old `<!-- claude-conf: end of section -->` line if there is one (installs from before the package was renamed to conf), and `agents/spec-writer.md`.
 
+**Installs from before `specifier`, `planner` and `builder` became skills** keep the old routing lines that name them, after the new section, because the package ships no `old-sections/` for that wording. The installer moves the three agents to the backup folder itself. To finish the upgrade, delete the old lines it leaves right after the `<!-- conf: end of section -->` comment; the diff it prints shows them.
+
 The script:
 - Copies the agents and skills, skipping any that are already identical.
+- Moves `agents/builder.md`, `agents/planner.md` and `agents/specifier.md`, which earlier versions installed, to the backup folder, since they're now skills. An agent of yours with one of those names is moved too.
 - Moves anything it replaces to `.claude/conf-backup-<timestamp>/`. Nothing is deleted.
 - Replaces the "Claude Code subagents" section of CLAUDE.md and leaves the rest alone, or adds the section at the end if it's missing. It prints a diff of the change and saves the previous file as `CLAUDE.md.bak-<timestamp>`.
   - It recognizes the section by its content: the heading, followed by lines from this package's section, or from an earlier wording saved in `old-sections/` (see "Editing the files" below). Code blocks around it don't matter.
@@ -107,7 +109,7 @@ If you change an agent's or skill's `description`, keep it plain, unquoted text 
 
 ### Manual install
 
-Copy `agents/*.md` to `~/.claude/agents/`, each folder in `skills/` to `~/.claude/skills/`, and paste `CLAUDE.md`, including its last line (the end-of-section comment), into your own CLAUDE.md in place of any existing "Claude Code subagents" section. If an older install left `agents/spec-writer.md`, delete it, since Claude Code would load it as well as `specifier`.
+Copy `agents/*.md` to `~/.claude/agents/`, each folder in `skills/` to `~/.claude/skills/`, and paste `CLAUDE.md`, including its last line (the end-of-section comment), into your own CLAUDE.md in place of any existing "Claude Code subagents" section. If an older install left `agents/spec-writer.md`, `agents/specifier.md`, `agents/planner.md` or `agents/builder.md`, delete them, since they're now the `spec`, `blueprint` and `build` skills.
 
 ## Undo
 
@@ -126,7 +128,8 @@ Every run works in a new temp folder with its own `HOME`, so your `~/.claude` is
 ## Naming
 
 The names avoid clashes with Claude Code's built-ins:
-- `explorer` and `planner`, not `Explore` and `Plan`. Built-in agents use those names, and plan mode uses the built-in `Plan` for its research.
+- `explorer`, not `Explore`, because a built-in agent uses that name.
+- `blueprint`, not `plan`, because of the built-in `/plan` command and `Plan` agent.
 - `reviewer`, not `review`, because of the built-in `/review` command.
 - `inspect`, not `debug`, and `check`, not `verify`, because `/debug` and `/verify` are built-in.
 

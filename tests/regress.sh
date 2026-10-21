@@ -47,19 +47,19 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 5 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 4 ] && ok "B1 fresh install copies 5 agents, 4 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 2 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 7 ] && ok "B1 fresh install copies 2 agents, 7 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
 out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && ok "B1 rerun reports 10 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$NOEND"
-mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/builder.md"
+mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/reviewer.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
-printf '%s\n' "$out" | grep -q '^would back up  *agents/builder.md$' && ok "B2 --dry-run says it would back up a changed agent" || bad B2 "no 'would back up' line: $(printf '%s' "$out" | grep -m1 builder)"
+printf '%s\n' "$out" | grep -q '^would back up  *agents/reviewer.md$' && ok "B2 --dry-run says it would back up a changed agent" || bad B2 "no 'would back up' line: $(printf '%s' "$out" | grep -m1 reviewer)"
 H=$(newhome b6); out=$(cd "$H" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "home folder" && ok "B6 --project refused in HOME (exit $rc)" || bad B6 "not refused in HOME (exit $rc)"
 out=$(cd "$PKG" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "that's the conf package itself" && ok "B6 --project refused in package (exit $rc)" || bad B6 "not refused in package (exit $rc)"
 H=$(newhome b7); put "$H" 'abc'; inst "$H" >/dev/null
 same "B7 append after a file with no final newline" "$H/.claude/CLAUDE.md" "$(printf 'abc\n\n%s' "$SEC")"; idem B7 "$H"
-H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/check"; printf 'my edit\n' > "$H/.claude/agents/builder.md"; printf 'my skill edit\n' > "$H/.claude/skills/check/SKILL.md"; out=$(inst "$H")
-cmp -s "$PKG/agents/builder.md" "$H/.claude/agents/builder.md" && [ "$(cat "$H"/.claude/conf-backup-*/agents/builder.md)" = 'my edit' ] && printf '%s' "$out" | grep -q '^backed up      agents/builder.md$' && printf '%s' "$out" | grep -q '^Backups are in ' && ok "B8 a changed agent is replaced, the old copy moved to the conf-backup folder" || bad B8 "not backed up: $(printf '%s' "$out" | grep -m1 builder)"
+H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/check"; printf 'my edit\n' > "$H/.claude/agents/reviewer.md"; printf 'my skill edit\n' > "$H/.claude/skills/check/SKILL.md"; out=$(inst "$H")
+cmp -s "$PKG/agents/reviewer.md" "$H/.claude/agents/reviewer.md" && [ "$(cat "$H"/.claude/conf-backup-*/agents/reviewer.md)" = 'my edit' ] && printf '%s' "$out" | grep -q '^backed up      agents/reviewer.md$' && printf '%s' "$out" | grep -q '^Backups are in ' && ok "B8 a changed agent is replaced, the old copy moved to the conf-backup folder" || bad B8 "not backed up: $(printf '%s' "$out" | grep -m1 reviewer)"
 [ "$(cat "$H"/.claude/conf-backup-*/skills/check/SKILL.md)" = 'my skill edit' ] && diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && printf '%s' "$out" | grep -q '^backed up      skills/check$' && ok "B8 a changed skill folder is replaced, the old copy moved to the conf-backup folder" || bad B8 "skill not backed up: $(printf '%s' "$out" | grep -m1 skills/check)"
 H=$(newhome b9); put "$H" '# Mine\n\nstuff\n'; inst "$H" >/dev/null
 same "B9 section appended to a file without one" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\nstuff\n\n%s' "$SEC")"; idem B9 "$H"
@@ -214,8 +214,8 @@ echo "== Refusals stop the whole install"
 if [ "$(id -u)" != 0 ]; then
   H=$(newhome x1); put "$H" '# Mine\n'; chmod a-w "$H/.claude/CLAUDE.md"
   refused "X1 a read-only CLAUDE.md that needs a change: refused before anything is installed" "$H" "can't write"; chmod u+w "$H/.claude/CLAUDE.md"
-  H=$(newhome x3); rmdir "$H/.claude"; inst "$H" >/dev/null; rm "$H/.claude/agents/builder.md"; chmod a-w "$H/.claude/CLAUDE.md"; out=$(inst "$H"); rc=$?; chmod u+w "$H/.claude/CLAUDE.md"
-  [ $rc = 0 ] && [ -f "$H/.claude/agents/builder.md" ] && printf '%s' "$out" | grep -q 'unchanged .*CLAUDE.md' && ok "X3 a read-only CLAUDE.md that's already current: install goes ahead" || bad X3 "rc=$rc $(printf '%s' "$out" | grep -m1 error)"
+  H=$(newhome x3); rmdir "$H/.claude"; inst "$H" >/dev/null; rm "$H/.claude/agents/reviewer.md"; chmod a-w "$H/.claude/CLAUDE.md"; out=$(inst "$H"); rc=$?; chmod u+w "$H/.claude/CLAUDE.md"
+  [ $rc = 0 ] && [ -f "$H/.claude/agents/reviewer.md" ] && printf '%s' "$out" | grep -q 'unchanged .*CLAUDE.md' && ok "X3 a read-only CLAUDE.md that's already current: install goes ahead" || bad X3 "rc=$rc $(printf '%s' "$out" | grep -m1 error)"
 else
   echo "skip X1, X3 read-only CLAUDE.md (running as root)"
 fi
@@ -228,7 +228,8 @@ H=$(newhome t1); rmdir "$H/.claude"; out=$(env HOME="$H" TMPDIR="$T/no/such/dir"
 [ $rc = 0 ] && [ -f "$H/.claude/CLAUDE.md" ] && ok "T1 unusable TMPDIR falls back to /tmp" || bad T1 "rc=$rc $(printf '%s' "$out" | tail -1)"
 
 echo "== Agent, skill and README checks"
-head -5 "$PKG/agents/builder.md" | grep -qx 'disallowedTools: Agent' && ok "Q1 builder denies the Agent tool" || bad Q1 "no disallowedTools: Agent"
+H=$(newhome q1); mkdir -p "$H/.claude/agents"; for n in builder planner specifier; do printf 'old %s\n' "$n" > "$H/.claude/agents/$n.md"; done; out=$(inst "$H")
+[ ! -e "$H/.claude/agents/builder.md" ] && [ ! -e "$H/.claude/agents/planner.md" ] && [ ! -e "$H/.claude/agents/specifier.md" ] && [ "$(cat "$H"/.claude/conf-backup-*/agents/planner.md)" = 'old planner' ] && printf '%s' "$out" | grep -q '^retired        agents/builder.md' && ok "Q1 agents that are now skills are moved to the conf-backup folder" || bad Q1 "not retired: $(ls "$H/.claude/agents")"
 sed -n 3p "$PKG/CLAUDE.md" | grep -q 'for the main conversation' && ok "Q2 CLAUDE.md starts with the subagent rule" || bad Q2 "rule missing"
 grep -q 'git status --short' "$PKG/agents/reviewer.md" && ok "Q3 reviewer checks untracked files" || bad Q3 "no git status"
 ! grep -q 'wrap the whole description in double quotes' "$PKG/README.md" && grep -q "Don't wrap it in double quotes" "$PKG/README.md" && ok "Q4 README no longer suggests double quotes" || bad Q4 "old advice"

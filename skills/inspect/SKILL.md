@@ -22,7 +22,7 @@ No fix without a root cause you can state and back with evidence.
 ## Rules
 - No shotgun changes: don't try several fixes at once to see what sticks.
 - Remove temporary logging and debug code before finishing.
-- If the fix is non-trivial (several files, design change), hand it to `planner`, then `builder`, then `reviewer`, as CLAUDE.md describes.
+- If the fix is non-trivial (several files, design change), use the `blueprint` skill, then `build`, then `reviewer`, as CLAUDE.md describes.
 
 ## Report
 - **Root cause**: one or two sentences
