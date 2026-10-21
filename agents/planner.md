@@ -3,6 +3,7 @@ name: planner
 description: Senior architect for planning. Use proactively before any non-trivial change (new feature, refactor, multi-file fix) whose requirements are already clear, or once a spec exists, to research the codebase and produce a step-by-step implementation plan. Read-only.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch
 model: opus
+effort: high
 color: purple
 ---
 

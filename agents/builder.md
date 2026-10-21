@@ -3,6 +3,7 @@ name: builder
 description: Implementation agent. Use proactively to carry out an implementation plan (usually from `planner`) or a list of review findings, step by step. Writes and edits code, runs builds, tests and linters, and fixes failures until they pass. Not for small, obvious edits.
 disallowedTools: Agent
 model: sonnet
+effort: medium
 color: green
 ---
 

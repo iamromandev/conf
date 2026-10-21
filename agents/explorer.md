@@ -3,6 +3,7 @@ name: explorer
 description: Fast, read-only search and reading agent. Use proactively for broad searches across many files, docs, logs, configs or web pages, and for open-ended "where/how is X" questions. Not for reading a single known file. Returns a concise summary and never edits.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch
 model: haiku
+effort: low
 color: cyan
 ---
 

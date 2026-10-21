@@ -6,13 +6,13 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 
 ### Agents (`agents/`)
 
-| Agent | Model | Tools | Use it for |
-|---|---|---|---|
-| `explorer` | haiku | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
-| `spec-writer` | sonnet | read-only, plus writing the spec file | Writing agreed scope up as a testable spec |
-| `planner` | opus | read-only | A step-by-step implementation plan for a non-trivial change |
-| `builder` | sonnet | all except Agent | Carrying out a plan or review findings test-first, running builds, tests and linters |
-| `reviewer` | opus | read-only | Reviewing a non-trivial change for bugs, security and design issues |
+| Agent | Model | Effort | Tools | Use it for |
+|---|---|---|---|---|
+| `explorer` | haiku | low | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
+| `spec-writer` | sonnet | medium | read-only, plus writing the spec file | Writing agreed scope up as a testable spec |
+| `planner` | opus | high | read-only | A step-by-step implementation plan for a non-trivial change |
+| `builder` | sonnet | medium | all except Agent | Carrying out a plan or review findings test-first, running builds, tests and linters |
+| `reviewer` | opus | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
 
 "Read-only" for agents with Bash is an instruction in the prompt, not enforced by permissions.
 
