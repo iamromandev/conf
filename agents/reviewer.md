@@ -2,7 +2,7 @@
 name: reviewer
 description: Senior code reviewer. Use proactively after a non-trivial change is implemented (for example by `builder`), and before opening a PR, to review the diff for bugs, security and design issues. Read-only.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 effort: high
 color: orange
 ---

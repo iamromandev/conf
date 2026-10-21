@@ -12,7 +12,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 | `specifier` | sonnet | medium | read-only, plus writing the spec file | Writing agreed scope up as a testable spec |
 | `planner` | opus | high | read-only | A step-by-step implementation plan for a non-trivial change |
 | `builder` | sonnet | medium | all except Agent | Carrying out a plan or review findings test-first, running builds, tests and linters |
-| `reviewer` | opus | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
+| `reviewer` | sonnet | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
 
 "Read-only" for agents with Bash is an instruction in the prompt, not enforced by permissions.
 
