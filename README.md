@@ -79,16 +79,15 @@ To update later, pull the latest version and run the installer again the same wa
 git -C ~/conf pull
 ```
 
-If you cloned it to `~/claude-conf` before the package was renamed, use that path instead, or move it: `mv ~/claude-conf ~/conf`.
+**Installs from before `spec-writer` was renamed to `specifier`** (they have `.claude/agents/spec-writer.md`) aren't upgraded cleanly. The installer updates the section but keeps its two old lines that name `spec-writer`, after the new section, and leaves `agents/spec-writer.md` in place, so Claude Code loads both agents. To upgrade one, run the installer, then delete the two `spec-writer` lines it leaves right after the `<!-- conf: end of section -->` comment (the diff it prints shows them), the old `<!-- claude-conf: end of section -->` line if there is one (installs from before the package was renamed to conf), and `agents/spec-writer.md`.
 
 The script:
 - Copies the agents and skills, skipping any that are already identical.
-- Moves anything it replaces to `.claude/conf-backup-<timestamp>/` (`claude-conf-backup-<timestamp>/` in runs from before the package was renamed from claude-conf). Nothing is deleted.
-- Retires older versions of these agents and skills (`plan.md`, `build.md`, `review.md`, `spec.md`, `spec-writer.md`, `explore.md`, and the `brainstorming`, `systematic-debugging`, `verify-before-done` and `test-driven-development` skills) to the same backup folder. A file at one of those paths is retired if the `name:` in its frontmatter is the old one (`Plan` for `agents/plan.md`, `review` for `agents/review.md`, and so on), so an agent or skill of your own at that path with that name is retired too. `--dry-run` lists them. To keep one, give it another file or folder name, e.g. `agents/my-review.md`; just moving it back from the backup doesn't last, since the next run retires it again.
+- Moves anything it replaces to `.claude/conf-backup-<timestamp>/`. Nothing is deleted.
 - Replaces the "Claude Code subagents" section of CLAUDE.md and leaves the rest alone, or adds the section at the end if it's missing. It prints a diff of the change and saves the previous file as `CLAUDE.md.bak-<timestamp>`.
-  - It recognizes the section by its content: the heading, followed by lines from this package's section. Every line an earlier release installed is still in the current section or in `old-sections/`, so sections from any release are recognized. Code blocks around it don't matter.
+  - It recognizes the section by its content: the heading, followed by lines from this package's section, or from an earlier wording saved in `old-sections/` (see "Editing the files" below). Code blocks around it don't matter.
   - Only the package's own lines are replaced. Any other line under the old section, such as a bullet or `@import` you added, a rule you edited or a `###` subsection, is kept where it is, so it ends up after the new section. Several copies of the section are merged into one.
-  - The section now ends with a `<!-- conf: end of section -->` comment (Claude Code drops HTML comments, so it costs nothing), and the old section is taken to run to that comment, or to `<!-- claude-conf: end of section -->`, the comment from before the rename, which is replaced by the new one. Without either (a section installed by the first release), it runs to the next `#` or `##` heading, and a `#` line inside a code block counts too.
+  - The section ends with a `<!-- conf: end of section -->` comment (Claude Code drops HTML comments, so it costs nothing), and the installed section is taken to run to that comment. Without it (if it was deleted, or the section was pasted without its last line), it runs to the next `#` or `##` heading, and a `#` line inside a code block counts too.
   - It warns about lines of the package's section it finds outside the section, such as old bullets under a heading you edited or after a `#` line, so you can delete leftovers.
   - A "Claude Code subagents" heading with none of the package's lines under it, such as a much older or heavily edited copy or an example of yours, is left alone. The section is added as usual, and the script warns about that line on every run until you delete or rename it.
   - If CLAUDE.md needs a change but it or its folder isn't writable, it stops before changing anything, agents and skills included.
@@ -98,25 +97,25 @@ The script:
 
 Running it again is safe: unchanged files are reported as unchanged.
 
-**If your old section lives in a project's CLAUDE.md**, run the script with `--project` from that project too, or delete the section there. Otherwise that project keeps routing to the old agent names, some of which the script retires.
+**If your old section lives in a project's CLAUDE.md**, run the script with `--project` from that project too, or delete the section there. Otherwise that project keeps its old routing.
 
 ### Editing the files
 
 If you change an agent's or skill's `description`, keep it plain, unquoted text that starts with a letter. Avoid ` #`: YAML reads it as the start of a comment, so the rest of the description is silently dropped. Avoid a colon followed by a space (e.g. "step by step: write…") or at the end, too, which isn't valid YAML. If you need either, wrap the description in single quotes and double any apostrophe inside (`it''s`). Don't wrap it in double quotes: `explorer`'s and `scope`'s descriptions contain double quotes, so the frontmatter would stop parsing. Claude Code then skips the agent, or loads the skill without a description.
 
-`CLAUDE.md` must start with the `## Claude Code subagents` heading, end with the end-of-section comment, and have no other headings or end-of-section comments; the installer stops if it doesn't. The installer recognizes an installed section by its lines, so before you reword or remove a line, save the current `CLAUDE.md` in an `old-sections/` folder next to it (e.g. as `old-sections/2026-11.md`). The installer reads every file there, so installs of the old wording are still recognized and updated, instead of being kept as your own lines. The end-of-section comment is the exception: the installer recognizes the one from before the rename itself (`OLD_END_MARK` in `install.sh`), so it needs no `old-sections/` file. `old-sections/2026-10-spec-writer.md` is the section from before `spec-writer` was renamed to `specifier`. `tests/regress.sh` checks that every line of the sections in `tests/fixtures/` is in the current section or in `old-sections/`.
+`CLAUDE.md` must start with the `## Claude Code subagents` heading, end with the end-of-section comment, and have no other headings or end-of-section comments; the installer stops if it doesn't. The installer recognizes an installed section by its lines, so before you reword or remove a line, save the current `CLAUDE.md` in an `old-sections/` folder next to it (e.g. as `old-sections/2026-11.md`). The installer reads every file there, so installs of the old wording are still recognized and updated, instead of being kept as your own lines. Until a line is reworded the package ships no `old-sections/` folder, and `tests/regress.sh` checks that (P5), so update that check when you add one. Leave the end-of-section comment itself as it is (`END_MARK` in `install.sh`): the installer finds where an installed section ends by it.
 
 ### Manual install
 
-Copy `agents/*.md` to `~/.claude/agents/`, each folder in `skills/` to `~/.claude/skills/`, and paste `CLAUDE.md`, including its last line (the end-of-section comment), into your own CLAUDE.md in place of any existing "Claude Code subagents" section. If you have agents or skills under the older names listed under "The script" above (such as `agents/spec-writer.md`), delete them, since Claude Code loads both the old and the new ones.
+Copy `agents/*.md` to `~/.claude/agents/`, each folder in `skills/` to `~/.claude/skills/`, and paste `CLAUDE.md`, including its last line (the end-of-section comment), into your own CLAUDE.md in place of any existing "Claude Code subagents" section. If an older install left `agents/spec-writer.md`, delete it, since Claude Code would load it as well as `specifier`.
 
 ## Undo
 
-Move the files back from `.claude/conf-backup-<timestamp>/`, or `.claude/claude-conf-backup-<timestamp>/` for runs before the rename (in `~/.claude` or your project), and restore `CLAUDE.md.bak-<timestamp>` over `CLAUDE.md`. Then delete the installed agents and skills you no longer want.
+Move the files back from `.claude/conf-backup-<timestamp>/` (in `~/.claude` or your project), and restore `CLAUDE.md.bak-<timestamp>` over `CLAUDE.md`. Then delete the installed agents and skills you no longer want.
 
 ## Tests
 
-`tests/regress.sh` runs `install.sh` through about 155 checks: fresh installs and re-runs, `--dry-run`, `--project`, retiring old names, upgrading a section installed by the first release or with the end comment from before the rename, or routing to `spec-writer` from before it was renamed to `specifier`, with your own lines around and inside it, and CLAUDE.md edge cases such as code blocks, other "Claude Code subagents" headings, Windows line endings and byte order marks. It compares the resulting files byte for byte.
+`tests/regress.sh` runs `install.sh` through about 115 checks: fresh installs and re-runs, `--dry-run`, `--project`, updating an installed section with your own lines around and inside it, with or without its end-of-section comment and after a line is reworded, and CLAUDE.md edge cases such as code blocks, other "Claude Code subagents" headings, Windows line endings and byte order marks. It compares the resulting files byte for byte.
 
 ```bash
 bash tests/regress.sh

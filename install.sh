@@ -7,7 +7,7 @@
 #              The section goes in ./CLAUDE.md, or ./.claude/CLAUDE.md if the project keeps it there
 #   --dry-run  show what would change, including a diff of CLAUDE.md, without touching anything
 #
-# Anything replaced or retired is moved to a timestamped backup folder, never deleted.
+# Anything replaced is moved to a timestamped backup folder, never deleted.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -27,13 +27,9 @@ HEADING='## Claude Code subagents'
 # The last line of the section. Claude Code drops HTML comments from CLAUDE.md, so it costs nothing,
 # and it shows where the section ends.
 END_MARK='<!-- conf: end of section -->'
-# The end comment from before the package was renamed from claude-conf. An installed copy that ends
-# with it is found and updated like a current one; the package's own CLAUDE.md must end with END_MARK.
-OLD_END_MARK='<!-- claude-conf: end of section -->'
 SECTION="$SRC/CLAUDE.md"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKED_UP=0
-RETIRED=0
 
 # awk helpers for reading a CLAUDE.md, shared by md_plan, the section update and the check of the
 # package's own section; see md_awk. Each line arrives as `line`, without trailing spaces, its
@@ -57,12 +53,12 @@ function is_heading(l) {
   sub(/^##[ \t]+/, "", l); sub(/[ \t]+#+[ \t]*$/, "", l); sub(/[ \t]+$/, "", l); gsub(/[ \t]+/, " ", l)
   return l == title
 }
-# True if the line is the end-of-section comment, or the one from before the rename.
+# True if the line is the end-of-section comment.
 function is_mark(l) {
   sub(/^[ \t]+/, "", l)
-  return l == mark || l == oldmark
+  return l == mark
 }
-# True if the line is a # or ## heading, which ends an old copy of the section without its end comment.
+# True if the line is a # or ## heading, which ends an installed copy of the section without its end comment.
 function is_top(l) {
   return l ~ /^ ? ? ?##?([ \t]|$)/
 }
@@ -73,14 +69,14 @@ function is_top(l) {
 md_awk() {
   local file="$1" prog="$2"
   shift 2
-  LC_ALL=C awk -v h="$HEADING" -v mark="$END_MARK" -v oldmark="$OLD_END_MARK" "$@" "$MD_AWK$prog" "$file"
+  LC_ALL=C awk -v h="$HEADING" -v mark="$END_MARK" "$@" "$MD_AWK$prog" "$file"
 }
 
 # Finds the copies of the section in a CLAUDE.md. A section heading is an installed copy if lines
 # of the package's section come right under it, before any other heading; other section headings
 # are an older or edited copy, or something of yours. An installed copy runs to its end-of-section
-# comment (the current one or the one from before the rename), if one comes before the next section
-# heading, and otherwise to the next # or ## heading.
+# comment, if one comes before the next section heading, and otherwise (the comment was deleted, or
+# the section was pasted without it) to the next # or ## heading.
 # Prints "installed|others|stray line|strays": the installed copies as "heading line:last line",
 # the other headings' lines, and the first and number of package lines outside the installed copies.
 SCAN='
@@ -198,7 +194,6 @@ say() {
     case "$verb" in
       installed) verb="would install" ;;
       "backed up") verb="would back up" ;;
-      retired) verb="would retire" ;;
       updated) verb="would update" ;;
       appended) verb="would append" ;;
       created) verb="would create" ;;
@@ -209,38 +204,12 @@ say() {
 
 # Move an existing file or folder under DEST into the backup folder, keeping its relative path.
 backup() {
-  local path="$1" verb="${2:-backed up}" rel="${1#"$DEST"/}"
+  local path="$1" rel="${1#"$DEST"/}"
   [ -e "$path" ] || return 0
   run mkdir -p "$BACKUP/$(dirname "$rel")"
   run mv "$path" "$BACKUP/$rel"
   BACKED_UP=1
-  say "$verb" "$rel"
-}
-
-# Print the name: value from a file's frontmatter, without quotes, spaces or a Windows line ending.
-frontmatter_name() {
-  LC_ALL=C awk '{ sub(/\r+$/, ""); sub(/[ \t]+$/, "") }
-    NR == 1 { sub(/^\357\273\277/, ""); if ($0 != "---") exit; next }
-    $0 == "---" { exit }
-    sub(/^name:[ \t]*/, "") {
-      sub(/[ \t]+$/, "")
-      if ($0 ~ /^".*"$/ || $0 ~ /^\047.*\047$/) $0 = substr($0, 2, length($0) - 2)
-      print; exit
-    }' "$1" 2>/dev/null
-}
-
-# Retire an agent or skill installed under an earlier name. This goes by the name in its frontmatter
-# alone, so a file of your own with that exact name is retired too; the summary at the end says so.
-retire() {
-  local path="$1" name="$2" file="$1"
-  [ -e "$path" ] || return 0
-  if [ -d "$path" ]; then file="$path/SKILL.md"; fi
-  if [ "$(frontmatter_name "$file")" = "$name" ]; then
-    backup "$path" retired
-    RETIRED=1
-  else
-    say left "${path#"$DEST"/} (its name isn't $name)"
-  fi
+  say "backed up" "$rel"
 }
 
 # Show a diff of CLAUDE.md, indented and without diff's file-name header.
@@ -331,18 +300,6 @@ for d in "$SRC"/skills/*/; do
   say installed "$rel"
 done
 
-# Earlier names of the same agents and skills
-retire "$DEST/agents/plan.md" Plan
-retire "$DEST/agents/build.md" build
-retire "$DEST/agents/review.md" review
-retire "$DEST/agents/spec.md" spec
-retire "$DEST/agents/spec-writer.md" spec-writer
-retire "$DEST/agents/explore.md" Explore
-retire "$DEST/skills/brainstorming" brainstorming
-retire "$DEST/skills/systematic-debugging" systematic-debugging
-retire "$DEST/skills/verify-before-done" verify-before-done
-retire "$DEST/skills/test-driven-development" test-driven-development
-
 # CLAUDE.md, as worked out above
 case "$verb" in
   unchanged) say unchanged "$CLAUDE_MD" ;;
@@ -391,16 +348,8 @@ done
 
 echo
 if [ "$DRY_RUN" = 1 ]; then
-  if [ "$RETIRED" = 1 ]; then
-    echo "Files marked \"would retire\" are matched by their name: alone. To keep one of your own,"
-    echo "rename the file (or skill folder) first, e.g. agents/review.md to agents/my-review.md."
-  fi
   echo "Dry run finished. Run again without --dry-run to apply."
 else
   if [ "$BACKED_UP" = 1 ]; then echo "Backups are in $BACKUP"; fi
-  if [ "$RETIRED" = 1 ]; then
-    echo "Retired files are matched by their name: alone. To keep one of your own, move it back from the"
-    echo "backup under another file (or skill folder) name, e.g. agents/my-review.md, or the next run retires it again."
-  fi
   echo "Done. Start a new Claude Code session to load the changes."
 fi
