@@ -10,7 +10,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 |---|---|---|---|---|
 | `explorer` | haiku | low | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
 | `specifier` | sonnet | medium | read-only, plus writing the spec file | Writing agreed scope up as a testable spec |
-| `planner` | opus | high | read-only | A step-by-step implementation plan for a non-trivial change |
+| `planner` | sonnet | high | read-only | A step-by-step implementation plan for a non-trivial change |
 | `builder` | sonnet | medium | all except Agent | Carrying out a plan or review findings test-first, running builds, tests and linters |
 | `reviewer` | sonnet | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
 
@@ -36,14 +36,14 @@ small, obvious change      → do it directly
 vague request              → scope (with you) → specifier → planner → builder → reviewer
 clear, non-trivial change  → planner → builder → reviewer
 something broken           → inspect → small fix directly, or planner → builder → reviewer
-reviewer requests changes  → builder → reviewer again (max 2 rounds)
+reviewer requests changes  → builder → reviewer again (max 1 round)
 before saying "done"       → check
 ```
 
 - Subagents can't ask you questions. `specifier` and `planner` mark questions that would change the scope or plan as BLOCKING, and Claude asks you those before going on.
 - `builder` gets the plan verbatim, plus the spec's acceptance criteria when there is one.
 - `reviewer` gets the plan, `builder`'s report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
-- If `reviewer` requests changes, its findings go back to `builder`. After 2 rounds Claude stops and reports to you.
+- If `reviewer` requests changes, its findings go back to `builder`. After 1 round Claude stops and reports to you.
 
 ## Install
 
