@@ -336,6 +336,7 @@ retire "$DEST/agents/plan.md" Plan
 retire "$DEST/agents/build.md" build
 retire "$DEST/agents/review.md" review
 retire "$DEST/agents/spec.md" spec
+retire "$DEST/agents/spec-writer.md" spec-writer
 retire "$DEST/agents/explore.md" Explore
 retire "$DEST/skills/brainstorming" brainstorming
 retire "$DEST/skills/systematic-debugging" systematic-debugging

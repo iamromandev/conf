@@ -1,5 +1,5 @@
 ---
-name: spec-writer
+name: specifier
 description: Product/technical spec writer. Use after the scope of a feature or change has been agreed with the user (for example with the `scope` skill), to write it up as a clear, testable spec (requirements, scope, acceptance criteria) before planning or coding.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, Write, Edit
 model: sonnet

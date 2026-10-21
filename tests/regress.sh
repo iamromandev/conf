@@ -20,6 +20,8 @@ MARK='<!-- conf: end of section -->'
 OLD_MARK='<!-- claude-conf: end of section -->'  # the end comment from before the rename to conf
 PRE_F="$PKG/tests/fixtures/pre-rename-section.md"  # the section as installed before the rename to conf
 PRE="$(cat "$PRE_F")"
+SW_F="$PKG/tests/fixtures/spec-writer-section.md"  # the section as installed before spec-writer was renamed to specifier
+SW="$(cat "$SW_F")"
 PASS=0 FAIL=0
 
 ok()   { PASS=$((PASS + 1)); printf 'PASS %s\n' "$1"; }
@@ -120,9 +122,10 @@ same "N3 pre-rename section in the middle: replaced, the rest kept" "$H/.claude/
 H=$(newhome n4); { sed -n 1,6p "$PRE_F"; printf "$BLOCK\n"; sed -n '7,$p' "$PRE_F"; } > "$H/.claude/CLAUDE.md"; out=$(inst "$H")
 same "N4 the old end comment bounds the copy: code block kept, no leftovers" "$H/.claude/CLAUDE.md" "$(printf "%s\n$BLOCK" "$SEC")"
 printf '%s' "$out" | grep -q 'repeat' && bad N4 "unexpected leftover warning" || ok "N4 no leftover warning"
-# If a section line is reworded later, the expected change below grows by that line.
+# Lines 6 and 9 were reworded when spec-writer became specifier; if another line is reworded, the expected change grows by it.
 H=$(newhome n5); put "$H" '%s\n' "$PRE"; a=$(treesum "$H"); out=$(cd "$T" && inst "$H" "" --dry-run); chg=$(printf '%s\n' "$out" | grep '^    [-+]')
-[ "$chg" = "$(printf '    -%s\n    +%s' "$OLD_MARK" "$MARK")" ] && ! printf '%s' "$out" | grep -q warning && [ "$a" = "$(treesum "$H")" ] && ok "N5 dry run on a pre-rename section changes only the end comment, nothing written" || bad N5 "changes: $chg"
+exp=$(printf '    -%s\n    +%s\n    -%s\n    +%s\n    -%s\n    +%s' "$(sed -n 6p "$PRE_F")" "$(sed -n 6p "$PKG/CLAUDE.md")" "$(sed -n 9p "$PRE_F")" "$(sed -n 9p "$PKG/CLAUDE.md")" "$OLD_MARK" "$MARK")
+[ "$chg" = "$exp" ] && ! printf '%s' "$out" | grep -q warning && [ "$a" = "$(treesum "$H")" ] && ok "N5 dry run on a pre-rename section changes only the two reworded lines and the end comment, nothing written" || bad N5 "changes: $chg"
 H=$(newhome n6); awk '{ printf "%s\r\n", $0 }' "$PRE_F" > "$H/.claude/CLAUDE.md"; printf -- '- mine\r\n' >> "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null; f="$H/.claude/CLAUDE.md"
 [ "$(wc -l < "$f" | tr -d ' ')" = "$(grep -c $'\r$' "$f")" ] && [ "$(grep -c $'\r\r' "$f")" = 0 ] && [ "$(heads "$f")" = 1 ] && grep -q $'^- mine\r$' "$f" && ! grep -q claude-conf "$f" && ok "N6 CRLF pre-rename section: stays CRLF, your line kept" || bad N6 "heads=$(heads "$f")"; idem N6 "$H"
 H=$(newhome n7); put "$H" '%s\n## Other\nkeep\n\n%s\n- extra\n' "$SEC" "$PRE"; inst "$H" >/dev/null
@@ -131,6 +134,22 @@ P=$T/proj7; rm -rf "$P"; mkdir -p "$P"; H=$(newhome hn8); printf '# Proj\n\n%s\n
 out=$(cd "$P" && inst "$H"); printf '%s' "$out" | grep -q 'proj7/CLAUDE.md also has' && ok "N8 a pre-rename section in a project CLAUDE.md is found" || bad N8 "no warning"
 (cd "$P" && inst "$H" "" --project >/dev/null)
 same "N8 --project updates it" "$P/CLAUDE.md" "$(printf '# Proj\n\n%s' "$SEC")"
+
+echo "== Upgrading a section that routes to spec-writer (from before it was renamed to specifier)"
+[ "$(grep -c spec-writer "$SW_F")" = 2 ] && [ "$(tail -n 1 "$SW_F")" = "$MARK" ] && ok "V0 the fixture has the spec-writer wording and the current end comment" || bad V0 "fixture isn't the spec-writer section"
+H=$(newhome v1); put "$H" '%s\n' "$SW"; out=$(cd "$T" && inst "$H")
+same "V1 a spec-writer section is replaced by the current one" "$H/.claude/CLAUDE.md" "$SEC"; idem V1 "$H"
+printf '%s' "$out" | grep -q warning && bad V1 "unexpected warning: $(printf '%s' "$out" | grep -m1 warning)" || ok "V1 no warning"
+H=$(newhome v2); put "$H" '# Mine\n\nstuff\n\n%s\n- Use pnpm.\n@docs/x.md\n\n## Other\n\nkeep\n' "$SW"; out=$(cd "$T" && inst "$H")
+same "V2 a spec-writer section in the middle: replaced, lines after its end comment and the rest kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\nstuff\n\n%s\n- Use pnpm.\n@docs/x.md\n\n## Other\n\nkeep' "$SEC")"; idem V2 "$H"
+printf '%s' "$out" | grep -q warning && bad V2 "unexpected warning: $(printf '%s' "$out" | grep -m1 warning)" || ok "V2 no warning"
+H=$(newhome v3); put "$H" '%s\n## Other\nkeep\n\n%s\n- extra\n' "$SEC" "$SW"; inst "$H" >/dev/null
+same "V3 a spec-writer copy after a current one is merged, its own line kept in place" "$H/.claude/CLAUDE.md" "$(printf '%s\n## Other\nkeep\n\n- extra' "$SEC")"; idem V3 "$H"
+# Like a real ~/.claude before the rename: the spec-writer section and agent
+H=$(newhome v4); put "$H" '%s\n' "$SW"; mkdir -p "$H/.claude/agents"; printf -- '---\nname: spec-writer\ndescription: old\n---\nbody\n' > "$H/.claude/agents/spec-writer.md"
+a=$(treesum "$H"); out=$(cd "$T" && inst "$H" "" --dry-run); chg=$(printf '%s\n' "$out" | grep '^    [-+]')
+exp=$(printf '    -%s\n    +%s\n    -%s\n    +%s' "$(sed -n 6p "$SW_F")" "$(sed -n 6p "$PKG/CLAUDE.md")" "$(sed -n 9p "$SW_F")" "$(sed -n 9p "$PKG/CLAUDE.md")")
+[ "$chg" = "$exp" ] && printf '%s' "$out" | grep -q '^would retire   agents/spec-writer.md$' && printf '%s' "$out" | grep -q '^would install  agents/specifier.md$' && ! printf '%s' "$out" | grep -q warning && [ "$a" = "$(treesum "$H")" ] && ok "V4 dry run: retire spec-writer.md, install specifier.md, change only the two reworded lines, nothing written" || bad V4 "changes: $chg"
 
 echo "== Code blocks don't change where the section is"
 H=$(newhome k1); put "$H" '# Notes\n```md\n```bash\nx\n```\n```\n\n%s\n' "$OLD"; inst "$H" >/dev/null
@@ -197,7 +216,8 @@ PW="$T/pkgreword"; cp -R "$PKG" "$PW"; mkdir -p "$PW/old-sections"; cp "$PKG/CLA
 sed '5s/.*/- A reworded rule./' "$PKG/CLAUDE.md" > "$PW/CLAUDE.md"
 H=$(newhome p5); put "$H" '%s\n- mine\n' "$OLD"; inst "$H" "$PW" >/dev/null
 same "P5 a reworded line: the old wording is still recognized through old-sections/" "$H/.claude/CLAUDE.md" "$(printf '%s\n- mine' "$(cat "$PW/CLAUDE.md")")"
-[ ! -d "$PKG/old-sections" ] && ok "P5 the package ships no old-sections/ folder until a line is reworded" || bad P5 "old-sections/ exists"
+missing=$(cat "$ORIG" "$PRE_F" "$SW_F" | grep -v '^$' | grep -v '^## ' | grep -vxF "$OLD_MARK" | grep -vxF -f <(cat "$PKG/CLAUDE.md" "$PKG"/old-sections/*.md))
+[ -z "$missing" ] && ok "P5 every line of an earlier section is in the current one or in old-sections/" || bad P5 "not recognized: $(printf '%s' "$missing" | head -1)"
 
 echo "== Windows line endings and byte order marks in the package"
 CR="$T/pkgcr"; cp -R "$PKG" "$CR"; awk '{ printf "%s\r\n", $0 }' "$PKG/CLAUDE.md" > "$CR/CLAUDE.md"
@@ -241,6 +261,11 @@ H=$(newhome r6); mkdir -p "$H/.claude/agents"; printf -- '\357\273\277---\nname:
 [ ! -e "$H/.claude/agents/plan.md" ] && ok "R6 BOM before the frontmatter: retired" || bad R6 "left in place"
 H=$(newhome r7); mkdir -p "$H/.claude/agents"; printf -- '--- \nname: Plan\n---  \n' > "$H/.claude/agents/plan.md"; inst "$H" >/dev/null
 [ ! -e "$H/.claude/agents/plan.md" ] && ok "R7 trailing spaces on the --- lines: retired" || bad R7 "left in place"
+H=$(newhome r9); mkdir -p "$H/.claude/agents"; printf -- '---\nname: spec-writer\ndescription: old\n---\nbody\n' > "$H/.claude/agents/spec-writer.md"; a=$(sum "$H/.claude/agents/spec-writer.md"); out=$(inst "$H")
+[ ! -e "$H/.claude/agents/spec-writer.md" ] && cmp -s "$PKG/agents/specifier.md" "$H/.claude/agents/specifier.md" && [ "$(sum "$H"/.claude/conf-backup-*/agents/spec-writer.md)" = "$a" ] && printf '%s' "$out" | grep -q '^retired        agents/spec-writer.md$' && ok "R9 spec-writer.md is retired to the backup folder, specifier.md installed" || bad R9 "not retired: $(printf '%s' "$out" | grep -m1 spec-writer)"
+out=$(inst "$H"); ! printf '%s' "$out" | grep -q 'spec-writer\|retired' && printf '%s' "$out" | grep -q '^unchanged      agents/specifier.md$' && ok "R9 rerun: nothing to retire, specifier.md unchanged" || bad R9 "rerun: $(printf '%s' "$out" | grep -m1 'spec')"
+H=$(newhome r10); mkdir -p "$H/.claude/agents"; printf -- '---\nname: my-specs\n---\nmine\n' > "$H/.claude/agents/spec-writer.md"; a=$(sum "$H/.claude/agents/spec-writer.md"); out=$(inst "$H")
+[ "$a" = "$(sum "$H/.claude/agents/spec-writer.md")" ] && printf '%s' "$out" | grep -q "its name isn't spec-writer" && ! printf '%s' "$out" | grep -q 'matched by their name' && ok "R10 a spec-writer.md of yours with another name is left alone" || bad R10 "retired or wrong message"
 H=$(newhome r8); out=$(inst "$H"); printf '%s' "$out" | grep -q 'matched by their name' && bad R8 "hint printed with nothing retired" || ok "R8 no retire hint when nothing was retired"
 
 echo "== Finding the section in --project mode"
@@ -291,6 +316,7 @@ else
 fi
 
 [ "$(tail -n 1 "$PKG/CLAUDE.md")" = "$MARK" ] && ! grep -q claude-conf "$PKG/CLAUDE.md" && ok "Q6 CLAUDE.md ends with the current end comment and has no claude-conf" || bad Q6 "wrong end comment"
+[ -f "$PKG/agents/specifier.md" ] && [ ! -e "$PKG/agents/spec-writer.md" ] && head -3 "$PKG/agents/specifier.md" | grep -qx 'name: specifier' && ! grep -rq spec-writer "$PKG/CLAUDE.md" "$PKG/agents" "$PKG/skills" && ok "Q7 the agent is specifier, and nothing routes to spec-writer" || bad Q7 "spec-writer still referenced: $(grep -rl spec-writer "$PKG/CLAUDE.md" "$PKG/agents" "$PKG/skills" | head -1)"
 
 echo
 echo "passed $PASS, failed $FAIL"
