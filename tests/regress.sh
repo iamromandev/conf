@@ -16,6 +16,7 @@ SEC="$(cat "$PKG/CLAUDE.md")"                  # the section as installed now
 NOEND_F="$T/noend-section.md"                   # the section without its end comment, as left when the comment
 sed '$d' "$PKG/CLAUDE.md" > "$NOEND_F"          # is deleted or the section is pasted without its last line
 NOEND="$(cat "$NOEND_F")"
+NL="$(wc -l < "$NOEND_F" | tr -d " ")"          # its line count
 NOEND_BODY="$(sed 1d "$NOEND_F")"               # everything under its heading
 MARK='<!-- conf: end of section -->'
 PASS=0 FAIL=0
@@ -98,7 +99,7 @@ H=$(newhome u14); put "$H" '%s\n\n### My notes\n- mine\n%s\n' "$NOEND" "$(sed -n
 same "U14 a ### subsection inside the old section is kept, its package lines still replaced" "$H/.claude/CLAUDE.md" "$(printf '%s\n\n### My notes\n- mine' "$SEC")"; idem U14 "$H"
 BLOCK='```bash\n# fast checks\nmake check\n```'
 H=$(newhome u15); { sed -n 1,6p "$NOEND_F"; printf "$BLOCK\n"; sed -n '7,$p' "$NOEND_F"; } > "$H/.claude/CLAUDE.md"; out=$(inst "$H")
-printf '%s' "$out" | grep -q 'line 19 and 6 more repeat' && ok "U15 a # line in a code block ends a section without the end comment, and the leftover lines get a warning" || bad U15 "no warning about line 19: $(printf '%s' "$out" | grep -m1 repeat)"
+printf '%s' "$out" | grep -q "line $((NL + 6)) and $((NL - 7)) more repeat" && ok "U15 a # line in a code block ends a section without the end comment, and the leftover lines get a warning" || bad U15 "no warning about line $((NL + 6)): $(printf '%s' "$out" | grep -m1 repeat)"
 H=$(newhome u15b); { sed -n 1,6p "$PKG/CLAUDE.md"; printf "$BLOCK\n"; sed -n '7,$p' "$PKG/CLAUDE.md"; } > "$H/.claude/CLAUDE.md"; out=$(inst "$H")
 same "U15b with the end comment, the section runs to it: code block kept, no leftovers" "$H/.claude/CLAUDE.md" "$(printf "%s\n$BLOCK" "$SEC")"
 printf '%s' "$out" | grep -q 'repeat' && bad U15b "unexpected leftover warning" || ok "U15b no leftover warning"
@@ -145,7 +146,7 @@ printf '%s' "$out" | grep -q "line $n .*left alone" && ok "W5 the warning names 
 H=$(newhome w6); put "$H" '## Claude Code subagents\n- my own note\n%s\n' "$MARK"; out=$(inst "$H")
 same "W6 a heading over only an end comment isn't an installed copy" "$H/.claude/CLAUDE.md" "$(printf '## Claude Code subagents\n- my own note\n%s\n\n%s' "$MARK" "$SEC")"; idem W6 "$H"
 H=$(newhome w7); put "$H" '## Workflow\n\n### Claude Code subagents\n%s\n' "$NOEND_BODY"; out=$(inst "$H")
-printf '%s' "$out" | grep -q 'line 5 and 10 more repeat' && ok "W7 package lines under an edited heading get a warning" || bad W7 "no warning: $(printf '%s' "$out" | grep -m1 'repeat\|warning')"
+printf '%s' "$out" | grep -q "line 5 and $((NL - 3)) more repeat" && ok "W7 package lines under an edited heading get a warning" || bad W7 "no warning: $(printf '%s' "$out" | grep -m1 'repeat\|warning')"
 # A section heading with none of the package's lines right under it must not take the lines of an
 # edited copy further down, even across a ### heading or up to that copy's end comment.
 for c in \
