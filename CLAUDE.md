@@ -11,4 +11,4 @@
 - Give `reviewer` the plan, `builder`'s report (especially Deviations), and the changed files or commit range.
 - If `reviewer` requests changes, send its Critical/Should-fix findings to `builder`, then re-run `reviewer`. Stop after 2 rounds and report to me.
 - Before saying work is done, fixed or passing (including when a subagent reports "Done") → `check` skill.
-<!-- claude-conf: end of section -->
+<!-- conf: end of section -->

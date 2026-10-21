@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the claude-conf agents, skills and CLAUDE.md section.
+# Install the conf agents, skills and CLAUDE.md section.
 #
 # Usage: install.sh [--project] [--dry-run]
 #   (default)  install to ~/.claude for all projects; the section goes in ~/.claude/CLAUDE.md
@@ -26,7 +26,10 @@ done
 HEADING='## Claude Code subagents'
 # The last line of the section. Claude Code drops HTML comments from CLAUDE.md, so it costs nothing,
 # and it shows where the section ends.
-END_MARK='<!-- claude-conf: end of section -->'
+END_MARK='<!-- conf: end of section -->'
+# The end comment from before the package was renamed from claude-conf. An installed copy that ends
+# with it is found and updated like a current one; the package's own CLAUDE.md must end with END_MARK.
+OLD_END_MARK='<!-- claude-conf: end of section -->'
 SECTION="$SRC/CLAUDE.md"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKED_UP=0
@@ -54,10 +57,10 @@ function is_heading(l) {
   sub(/^##[ \t]+/, "", l); sub(/[ \t]+#+[ \t]*$/, "", l); sub(/[ \t]+$/, "", l); gsub(/[ \t]+/, " ", l)
   return l == title
 }
-# True if the line is the end-of-section comment.
+# True if the line is the end-of-section comment, or the one from before the rename.
 function is_mark(l) {
   sub(/^[ \t]+/, "", l)
-  return l == mark
+  return l == mark || l == oldmark
 }
 # True if the line is a # or ## heading, which ends an old copy of the section without its end comment.
 function is_top(l) {
@@ -70,13 +73,14 @@ function is_top(l) {
 md_awk() {
   local file="$1" prog="$2"
   shift 2
-  LC_ALL=C awk -v h="$HEADING" -v mark="$END_MARK" "$@" "$MD_AWK$prog" "$file"
+  LC_ALL=C awk -v h="$HEADING" -v mark="$END_MARK" -v oldmark="$OLD_END_MARK" "$@" "$MD_AWK$prog" "$file"
 }
 
 # Finds the copies of the section in a CLAUDE.md. A section heading is an installed copy if lines
 # of the package's section come right under it, before any other heading; other section headings
 # are an older or edited copy, or something of yours. An installed copy runs to its end-of-section
-# comment, if one comes before the next section heading, and otherwise to the next # or ## heading.
+# comment (the current one or the one from before the rename), if one comes before the next section
+# heading, and otherwise to the next # or ## heading.
 # Prints "installed|others|stray line|strays": the installed copies as "heading line:last line",
 # the other headings' lines, and the first and number of package lines outside the installed copies.
 SCAN='
@@ -130,9 +134,9 @@ tmpdir="${TMPDIR:-/tmp}"
 if [ ! -d "$tmpdir" ] || [ ! -w "$tmpdir" ]; then tmpdir=/tmp; fi
 tmp="" section="" stock=""
 trap 'rm -f "$tmp" "$section" "$stock"' EXIT
-tmp="$(mktemp "$tmpdir/claude-conf.XXXXXX")"
-section="$(mktemp "$tmpdir/claude-conf.XXXXXX")"
-stock="$(mktemp "$tmpdir/claude-conf.XXXXXX")"
+tmp="$(mktemp "$tmpdir/conf.XXXXXX")"
+section="$(mktemp "$tmpdir/conf.XXXXXX")"
+stock="$(mktemp "$tmpdir/conf.XXXXXX")"
 clean() {
   LC_ALL=C awk 'NR == 1 { sub(/^\357\273\277/, "") } { sub(/\r+$/, ""); sub(/[ \t]+$/, ""); print }' "$1"
 }
@@ -150,14 +154,14 @@ export CLAUDE_CONF_SECTION="$section" CLAUDE_CONF_STOCK="$stock"
 # The package's section must be the heading, then lines of its own, then the end-of-section
 # comment, with no other headings or end comments; finding it again in CLAUDE.md relies on that.
 if ! md_awk "$section" 'NR == 1 && !is_heading(line) { bad = 1 } NR > 1 && line ~ /^ ? ? ?#+([ \t]|$)/ { bad = 1 }
-    is_mark(line) { marks++ } { last = line } END { exit (bad || marks != 1 || !is_mark(last)) }'; then
+    is_mark(line) { marks++ } { last = line } END { sub(/^[ \t]+/, "", last); exit (bad || marks != 1 || last != mark) }'; then
   printf '%-14s %s\n' error "The package's CLAUDE.md must start with the \"$HEADING\" heading, end with the line $END_MARK, and have no other headings or end comments. Nothing was changed." >&2
   exit 1
 fi
 
 if [ "$PROJECT" = 1 ]; then
   if [ "$PWD" -ef "$SRC" ]; then
-    echo "--project installs into the current folder, and that's the claude-conf package itself." >&2
+    echo "--project installs into the current folder, and that's the conf package itself." >&2
     echo "Run it from your project's folder instead:" >&2
     echo "  cd /path/to/your/project && \"$SRC/install.sh\" --project" >&2
     exit 1
@@ -180,7 +184,7 @@ else
   DEST="$HOME/.claude"
   CLAUDE_MD="$DEST/CLAUDE.md"
 fi
-BACKUP="$DEST/claude-conf-backup-$STAMP"
+BACKUP="$DEST/conf-backup-$STAMP"
 
 run() {
   if [ "$DRY_RUN" = 0 ]; then "$@"; fi

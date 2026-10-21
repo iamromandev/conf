@@ -8,7 +8,7 @@
 set -u
 here="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 PKG_SRC="$(CDPATH='' cd -- "${1:-$here/..}" && pwd)"
-T="$(mktemp -d "${TMPDIR:-/tmp}/claude-conf-test.XXXXXX")"
+T="$(mktemp -d "${TMPDIR:-/tmp}/conf-test.XXXXXX")"
 mkdir -p "$T/tmp"
 cp -R "$PKG_SRC" "$T/pkg"
 PKG="$T/pkg"
@@ -16,7 +16,10 @@ SEC="$(cat "$PKG/CLAUDE.md")"                  # the section as installed now
 ORIG="$PKG/tests/fixtures/original-section.md"  # the section as the first release installed it
 OLD="$(cat "$ORIG")"
 OLD_BODY="$(sed 1d "$ORIG")"                    # everything under its heading
-MARK='<!-- claude-conf: end of section -->'
+MARK='<!-- conf: end of section -->'
+OLD_MARK='<!-- claude-conf: end of section -->'  # the end comment from before the rename to conf
+PRE_F="$PKG/tests/fixtures/pre-rename-section.md"  # the section as installed before the rename to conf
+PRE="$(cat "$PRE_F")"
 PASS=0 FAIL=0
 
 ok()   { PASS=$((PASS + 1)); printf 'PASS %s\n' "$1"; }
@@ -51,11 +54,11 @@ out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && o
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"; mkdir -p "$H/.claude/agents"; printf -- '---\nname: Plan\n---\n' > "$H/.claude/agents/plan.md"
 a=$(treesum "$H"); inst "$H" "" --dry-run >/dev/null; [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
 H=$(newhome b6); out=$(cd "$H" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "home folder" && ok "B6 --project refused in HOME (exit $rc)" || bad B6 "not refused in HOME (exit $rc)"
-out=$(cd "$PKG" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "claude-conf package itself" && ok "B6 --project refused in package (exit $rc)" || bad B6 "not refused in package (exit $rc)"
+out=$(cd "$PKG" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "that's the conf package itself" && ok "B6 --project refused in package (exit $rc)" || bad B6 "not refused in package (exit $rc)"
 H=$(newhome b7); put "$H" 'abc'; inst "$H" >/dev/null
 same "B7 append after a file with no final newline" "$H/.claude/CLAUDE.md" "$(printf 'abc\n\n%s' "$SEC")"; idem B7 "$H"
 H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/brainstorming"; printf -- '---\nname: Plan\ndescription: x\n---\nbody\n' > "$H/.claude/agents/plan.md"; printf -- '---\nname: brainstorming\n---\n' > "$H/.claude/skills/brainstorming/SKILL.md"
-inst "$H" >/dev/null; [ ! -e "$H/.claude/agents/plan.md" ] && [ ! -e "$H/.claude/skills/brainstorming" ] && ls "$H"/.claude/claude-conf-backup-*/agents/plan.md >/dev/null 2>&1 && ok "B8 old claude-conf agent and skill retired to backup" || bad B8 "not retired"
+inst "$H" >/dev/null; [ ! -e "$H/.claude/agents/plan.md" ] && [ ! -e "$H/.claude/skills/brainstorming" ] && ls "$H"/.claude/conf-backup-*/agents/plan.md >/dev/null 2>&1 && ! ls -d "$H"/.claude/claude-conf-backup-* >/dev/null 2>&1 && ok "B8 old agent and skill retired to the conf-backup folder" || bad B8 "not retired"
 H=$(newhome b9); put "$H" '# Mine\n\nstuff\n'; inst "$H" >/dev/null
 same "B9 section appended to a file without one" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\nstuff\n\n%s' "$SEC")"; idem B9 "$H"
 
@@ -102,6 +105,32 @@ H=$(newhome u16); put "$H" '%s\n## Other\nkeep\n\n%s\n- extra\n' "$SEC" "$OLD"; 
 same "U16 a later copy after another heading is merged, its own line kept in place" "$H/.claude/CLAUDE.md" "$(printf '%s\n## Other\nkeep\n\n- extra' "$SEC")"; idem U16 "$H"
 H=$(newhome u17); sed 's/^- .*/&  /' "$ORIG" > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
 same "U17 package lines with trailing spaces are still recognized" "$H/.claude/CLAUDE.md" "$SEC"
+
+echo "== Upgrading a section with the end comment from before the rename to conf"
+# (runs from $T where there's no CLAUDE.md, so the "also has" warning for the repo's own doesn't show)
+[ "$(tail -n 1 "$PRE_F")" = "$OLD_MARK" ] && ok "N0 the fixture ends with the pre-rename end comment" || bad N0 "fixture doesn't end with $OLD_MARK"
+H=$(newhome n1); put "$H" '%s\n' "$PRE"; out=$(cd "$T" && inst "$H")
+same "N1 a pre-rename section is replaced by the current one" "$H/.claude/CLAUDE.md" "$SEC"; idem N1 "$H"
+printf '%s' "$out" | grep -q warning && bad N1 "unexpected warning: $(printf '%s' "$out" | grep -m1 warning)" || ok "N1 no warning"
+H=$(newhome n2); put "$H" '# Mine\n\n%s\n- Use pnpm.\n@docs/x.md\n' "$PRE"; out=$(cd "$T" && inst "$H")
+same "N2 lines after the old end comment are kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s\n- Use pnpm.\n@docs/x.md' "$SEC")"; idem N2 "$H"
+printf '%s' "$out" | grep -q warning && bad N2 "unexpected warning: $(printf '%s' "$out" | grep -m1 warning)" || ok "N2 no warning"
+H=$(newhome n3); put "$H" '# Mine\n\n%s\n\n## Other\n\nkeep\n' "$PRE"; inst "$H" >/dev/null
+same "N3 pre-rename section in the middle: replaced, the rest kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s\n\n## Other\n\nkeep' "$SEC")"; idem N3 "$H"
+H=$(newhome n4); { sed -n 1,6p "$PRE_F"; printf "$BLOCK\n"; sed -n '7,$p' "$PRE_F"; } > "$H/.claude/CLAUDE.md"; out=$(inst "$H")
+same "N4 the old end comment bounds the copy: code block kept, no leftovers" "$H/.claude/CLAUDE.md" "$(printf "%s\n$BLOCK" "$SEC")"
+printf '%s' "$out" | grep -q 'repeat' && bad N4 "unexpected leftover warning" || ok "N4 no leftover warning"
+# If a section line is reworded later, the expected change below grows by that line.
+H=$(newhome n5); put "$H" '%s\n' "$PRE"; a=$(treesum "$H"); out=$(cd "$T" && inst "$H" "" --dry-run); chg=$(printf '%s\n' "$out" | grep '^    [-+]')
+[ "$chg" = "$(printf '    -%s\n    +%s' "$OLD_MARK" "$MARK")" ] && ! printf '%s' "$out" | grep -q warning && [ "$a" = "$(treesum "$H")" ] && ok "N5 dry run on a pre-rename section changes only the end comment, nothing written" || bad N5 "changes: $chg"
+H=$(newhome n6); awk '{ printf "%s\r\n", $0 }' "$PRE_F" > "$H/.claude/CLAUDE.md"; printf -- '- mine\r\n' >> "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null; f="$H/.claude/CLAUDE.md"
+[ "$(wc -l < "$f" | tr -d ' ')" = "$(grep -c $'\r$' "$f")" ] && [ "$(grep -c $'\r\r' "$f")" = 0 ] && [ "$(heads "$f")" = 1 ] && grep -q $'^- mine\r$' "$f" && ! grep -q claude-conf "$f" && ok "N6 CRLF pre-rename section: stays CRLF, your line kept" || bad N6 "heads=$(heads "$f")"; idem N6 "$H"
+H=$(newhome n7); put "$H" '%s\n## Other\nkeep\n\n%s\n- extra\n' "$SEC" "$PRE"; inst "$H" >/dev/null
+same "N7 a pre-rename copy after a current one is merged, its own line kept in place" "$H/.claude/CLAUDE.md" "$(printf '%s\n## Other\nkeep\n\n- extra' "$SEC")"; idem N7 "$H"
+P=$T/proj7; rm -rf "$P"; mkdir -p "$P"; H=$(newhome hn8); printf '# Proj\n\n%s\n' "$PRE" > "$P/CLAUDE.md"
+out=$(cd "$P" && inst "$H"); printf '%s' "$out" | grep -q 'proj7/CLAUDE.md also has' && ok "N8 a pre-rename section in a project CLAUDE.md is found" || bad N8 "no warning"
+(cd "$P" && inst "$H" "" --project >/dev/null)
+same "N8 --project updates it" "$P/CLAUDE.md" "$(printf '# Proj\n\n%s' "$SEC")"
 
 echo "== Code blocks don't change where the section is"
 H=$(newhome k1); put "$H" '# Notes\n```md\n```bash\nx\n```\n```\n\n%s\n' "$OLD"; inst "$H" >/dev/null
@@ -159,6 +188,10 @@ PM="$T/pkgnomark"; cp -R "$PKG" "$PM"; sed '$d' "$PKG/CLAUDE.md" > "$PM/CLAUDE.m
 H=$(newhome p4); put "$H" '# Mine\n'; refused "P4 a package section without the end comment: refused" "$H" "package's CLAUDE.md" "$PM"
 PE="$T/pkgmidmark"; cp -R "$PKG" "$PE"; awk -v m="$MARK" 'NR == 6 { print m } { print }' "$PKG/CLAUDE.md" > "$PE/CLAUDE.md"
 H=$(newhome p6); put "$H" '# Mine\n'; refused "P6 a package section with an end comment in the middle: refused" "$H" "package's CLAUDE.md" "$PE"
+PL="$T/pkglegacy"; cp -R "$PKG" "$PL"; cp "$PRE_F" "$PL/CLAUDE.md"
+H=$(newhome p7); put "$H" '# Mine\n'; refused "P7 a package section ending with the pre-rename end comment: refused" "$H" "package's CLAUDE.md" "$PL"
+PO="$T/pkgoldmid"; cp -R "$PKG" "$PO"; awk -v m="$OLD_MARK" 'NR == 6 { print m } { print }' "$PKG/CLAUDE.md" > "$PO/CLAUDE.md"
+H=$(newhome p8); put "$H" '# Mine\n'; refused "P8 a package section with the pre-rename end comment in the middle: refused" "$H" "package's CLAUDE.md" "$PO"
 # Rewording a line the way README describes: save the current section in old-sections/ first
 PW="$T/pkgreword"; cp -R "$PKG" "$PW"; mkdir -p "$PW/old-sections"; cp "$PKG/CLAUDE.md" "$PW/old-sections/previous.md"
 sed '5s/.*/- A reworded rule./' "$PKG/CLAUDE.md" > "$PW/CLAUDE.md"
@@ -256,6 +289,8 @@ if command -v ruby >/dev/null; then
 else
   echo "skip Q5 frontmatter parse check (needs Ruby)"
 fi
+
+[ "$(tail -n 1 "$PKG/CLAUDE.md")" = "$MARK" ] && ! grep -q claude-conf "$PKG/CLAUDE.md" && ok "Q6 CLAUDE.md ends with the current end comment and has no claude-conf" || bad Q6 "wrong end comment"
 
 echo
 echo "passed $PASS, failed $FAIL"
