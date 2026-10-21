@@ -9,7 +9,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 | Agent | Model | Tools | Use it for |
 |---|---|---|---|
 | `explorer` | haiku | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
-| `spec-writer` | opus | read-only, plus writing the spec file | Writing agreed scope up as a testable spec |
+| `spec-writer` | sonnet | read-only, plus writing the spec file | Writing agreed scope up as a testable spec |
 | `planner` | opus | read-only | A step-by-step implementation plan for a non-trivial change |
 | `builder` | sonnet | all except Agent | Carrying out a plan or review findings test-first, running builds, tests and linters |
 | `reviewer` | opus | read-only | Reviewing a non-trivial change for bugs, security and design issues |
