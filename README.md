@@ -87,8 +87,8 @@ git -C ~/conf pull
 The script:
 - Copies the agents and skills, skipping any that are already identical.
 - Moves `agents/builder.md`, `agents/planner.md` and `agents/specifier.md`, which earlier versions installed, to the backup folder, since they're now skills. An agent of yours with one of those names is moved too.
-- Moves anything it replaces to `.claude/conf-backup-<timestamp>/`. Nothing is deleted.
-- Replaces the "Claude Code subagents" section of CLAUDE.md and leaves the rest alone, or adds the section at the end if it's missing. It prints a diff of the change and saves the previous file as `CLAUDE.md.bak-<timestamp>`.
+- Moves any agent or skill it replaces to `.claude/conf-backup-<timestamp>/`. Nothing is deleted.
+- Replaces the "Claude Code subagents" section of CLAUDE.md and leaves the rest alone, or adds the section at the end if it's missing. It prints a diff of the change and keeps no backup of the previous file.
   - It recognizes the section by its content: the heading, followed by lines from this package's section, or from an earlier wording saved in `old-sections/` (see "Editing the files" below). Code blocks around it don't matter.
   - Only the package's own lines are replaced. Any other line under the old section, such as a bullet or `@import` you added, a rule you edited or a `###` subsection, is kept where it is, so it ends up after the new section. Several copies of the section are merged into one.
   - The section ends with a `<!-- conf: end of section -->` comment (Claude Code drops HTML comments, so it costs nothing), and the installed section is taken to run to that comment. Without it (if it was deleted, or the section was pasted without its last line), it runs to the next `#` or `##` heading, and a `#` line inside a code block counts too.
@@ -115,7 +115,7 @@ Copy `agents/*.md` to `~/.claude/agents/`, each folder in `skills/` to `~/.claud
 
 ## Undo
 
-Move the files back from `.claude/conf-backup-<timestamp>/` (in `~/.claude` or your project), and restore `CLAUDE.md.bak-<timestamp>` over `CLAUDE.md`. Then delete the installed agents and skills you no longer want.
+Move the files back from `.claude/conf-backup-<timestamp>/` (in `~/.claude` or your project), and delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-- conf: end of section -->` comment). Then delete the installed agents and skills you no longer want.
 
 ## Tests
 
