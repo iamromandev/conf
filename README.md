@@ -36,13 +36,13 @@ small, obvious change      → do it directly
 vague request              → scope (with you) → spec → blueprint → build → reviewer
 clear, non-trivial change  → blueprint → build → reviewer
 something broken           → inspect → small fix directly, or blueprint → build → reviewer
-reviewer requests changes  → build → reviewer again (max 1 round)
+reviewer finds issues      → build → reviewer again (max 1 round)
 before saying "done"       → check
 ```
 
 - `scope`, `spec`, `blueprint` and `build` run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
 - `reviewer` is still a subagent, so it reviews the change with fresh eyes. It gets the plan, the build report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
-- If `reviewer` requests changes, Claude fixes its findings with `build`. After 1 round Claude stops and reports to you.
+- If `reviewer` reports any Critical or Should-fix finding, whatever its verdict (so "Approve with changes" counts too), Claude fixes them with `build` and runs `reviewer` again, which checks each finding was fixed. Nits alone don't start a fix round. After 1 round Claude stops and reports to you.
 
 ## Install
 
