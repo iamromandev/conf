@@ -38,13 +38,13 @@ clear, non-trivial change  → blueprint → build → reviewer
 something broken           → inspect → small fix directly, or blueprint → build → reviewer
 reviewer finds issues      → build → reviewer again (max 1 round)
 before saying "done"       → check
-git, only when you ask     → branch → commit → PR → merge (+ cleanup)
+git, only when you ask     → branch → commit → PR → merge (+ cleanup, issue to Done)
 ```
 
 - `scope`, `spec`, `blueprint` and `build` run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
 - `reviewer` is still a subagent, so it reviews the change with fresh eyes. It gets the plan, the build report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
 - If `reviewer` reports any Critical or Should-fix finding, whatever its verdict (so "Approve with changes" counts too), Claude fixes them with `build` and runs `reviewer` again, which checks each finding was fixed. Nits alone don't start a fix round. After 1 round Claude stops and reports to you.
-- Claude commits, opens PRs and merges only when you ask, and stops at the stage you name. It stays on the branch made for the task, or cuts one from the current branch (`123-short-name`, or `fix/short-name` without an issue), writes Conventional Commits that end in `(#123)` when there's an issue, and opens the PR against that parent branch with Summary, Changes and Testing sections. It merges once CI has passed, the branch is rebased onto its base and no review requests changes or has unresolved threads: a rebase merge for 1 commit, a squash merge for more. Then it deletes the remote and local branch, switches back to the parent and pulls.
+- Claude commits, opens PRs and merges only when you ask, and stops at the stage you name. It stays on the branch made for the task, or cuts one from the current branch (`123-short-name`, or `fix/short-name` without an issue), writes Conventional Commits that end in `(#123)` when there's an issue, and opens the PR against that parent branch with Summary, Changes and Testing sections. It merges once CI has passed, the branch is rebased onto its base and no review requests changes or has unresolved threads: a rebase merge for 1 commit, a squash merge for more. Then it deletes the remote and local branch, switches back to the parent and pulls. If there's an issue, it closes it or moves it to Done in whatever tracker it lives in (GitHub, Jira, Linear…), unless the merge already did, and comments with a link to the merged PR.
 
 ## Install
 
