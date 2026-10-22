@@ -7,7 +7,8 @@
 #              The section goes in ./CLAUDE.md, or ./.claude/CLAUDE.md if the project keeps it there
 #   --dry-run  show what would change, including a diff of CLAUDE.md, without touching anything
 #
-# Anything replaced is moved to a timestamped backup folder, never deleted.
+# Agents and skills it replaces are moved to a timestamped backup folder, never deleted.
+# CLAUDE.md is updated in place, with no backup; the diff it prints shows what changed.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -319,9 +320,7 @@ case "$verb" in
   *)
     say "$verb" "$CLAUDE_MD"
     show_diff "$CLAUDE_MD" "$tmp"
-    run cp "$CLAUDE_MD" "$CLAUDE_MD.bak-$STAMP"
-    run cp "$tmp" "$CLAUDE_MD"
-    if [ "$DRY_RUN" = 0 ]; then echo "               previous copy: $CLAUDE_MD.bak-$STAMP"; fi ;;
+    run cp "$tmp" "$CLAUDE_MD" ;;
 esac
 # What the new CLAUDE.md still holds besides the section (line numbers are in the new file)
 if md_plan "$tmp"; then

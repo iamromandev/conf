@@ -67,6 +67,7 @@ same "B9 section appended to a file without one" "$H/.claude/CLAUDE.md" "$(print
 echo "== Updating a section without its end comment (deleted, or pasted without it)"
 H=$(newhome u1); put "$H" '# Mine\n\n%s\n- My own rule.\n@docs/team.md\n' "$NOEND"; inst "$H" >/dev/null
 same "U1 lines appended after the old section are kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\n%s\n- My own rule.\n@docs/team.md' "$SEC")"; idem U1 "$H"
+ls "$H/.claude" | grep -q 'CLAUDE.md.bak' && bad U1b "a CLAUDE.md backup was saved: $(ls "$H/.claude" | grep bak)" || ok "U1b updating CLAUDE.md saves no backup of it"
 H=$(newhome u2); put "$H" '# Mine\n\nstuff\n\n%s\n\n## Other\n\nkeep\n' "$NOEND"; inst "$H" >/dev/null
 same "U2 section in the middle: replaced, the rest kept" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\nstuff\n\n%s\n\n## Other\n\nkeep' "$SEC")"; idem U2 "$H"
 H=$(newhome u3); { sed -n 1,5p "$NOEND_F"; echo '- Use pnpm, never npm.'; sed -n '6,$p' "$NOEND_F"; } > "$H/.claude/CLAUDE.md"; inst "$H" >/dev/null
