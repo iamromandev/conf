@@ -16,6 +16,7 @@
 - PR: open it with gh against the parent branch (in a later session, the PR's existing base), titled like the commit summary, with Summary, Changes and Testing sections and `Closes #<issue>` when there is one.
 - Merge only when CI has passed (none pending or failed; no checks counts as passed, say so), no review requests changes and no review thread is unresolved; otherwise stop and tell me which. If the branch is behind its base, rebase it onto the base (gh pr update-branch --rebase) and wait for CI again; stop on conflicts. Then count the PR's commits and merge without asking again: rebase if the PR has 1 commit, squash if more. If that method isn't allowed, stop and tell me; don't try another method.
 - After merging, delete the remote and local branch, switch to the parent branch, pull, and prune stale remote branches.
+- Then, when there is an issue, update it in the tracker it lives in (GitHub, Jira, Linear…): close it or move it to Done unless the merge already did, and comment with a link to the merged PR. If you can't reach that tracker, say so instead.
 - Per agent call, model and/or effort may move at most one step each from its default, within haiku → sonnet → opus and low → medium → high → xhigh. Never max.
 - Raise for security/auth, data migrations, irreversible or destructive operations, concurrency, or a re-run after review. Otherwise you may lower small, mechanical or single-file calls.
 - Announce overrides in one line, like "reviewer at xhigh: auth change". No note for defaults.
