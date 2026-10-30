@@ -214,9 +214,9 @@ missing=""; for n in $(grep -o '`[a-z-]*`' "$PKG/CLAUDE.md" | tr -d '`' | sort -
 missing=""; for s in '^- Git work only when I ask' '^- Branch:' '<short-kebab-name>' '^- Commits:' '^- PR:' 'Closes #<issue>' '^- Merge only when' 'squash if more' '^- After merging' 'delete the remote and local branch' 'link to the merged PR'; do grep -q -- "$s" "$PKG/CLAUDE.md" || missing="$missing [$s]"; done
 [ -z "$missing" ] && ok "Q8 CLAUDE.md has every git rule: trigger, branch, commit, PR, merge, cleanup, issue update" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
-a="$PKG/agents"; grep -qx 'model: opus' "$a/reviewer.md" && grep -qx 'effort: high' "$a/reviewer.md" && grep -qx 'model: sonnet' "$a/explorer.md" && grep -qx 'effort: medium' "$a/explorer.md" \
-  && grep -q '^| `reviewer` | opus | high |' "$PKG/README.md" && grep -q '^| `explorer` | sonnet | medium |' "$PKG/README.md" \
-  && ok "Q10 reviewer is opus/high and explorer sonnet/medium, in the agents and README" || bad Q10 "model or effort differs"
+a="$PKG/agents"; grep -qx 'model: opus' "$a/reviewer.md" && grep -qx 'effort: high' "$a/reviewer.md" && grep -qx 'model: haiku' "$a/explorer.md" && grep -qx 'effort: medium' "$a/explorer.md" \
+  && grep -q '^| `reviewer` | opus | high |' "$PKG/README.md" && grep -q '^| `explorer` | haiku | medium |' "$PKG/README.md" \
+  && ok "Q10 reviewer is opus/high and explorer haiku/medium, in the agents and README" || bad Q10 "model or effort differs"
 # (bracketed so this line doesn't match itself)
 legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf'
 hits=$(cd "$PKG" && grep -nE "$legacy" README.md install.sh tests/regress.sh)

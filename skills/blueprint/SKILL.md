@@ -9,7 +9,7 @@ Plan the change before writing code, in this conversation, so the `build` skill 
 
 ## Process
 1. Restate the goal and success criteria in a sentence or two. If a question would change the plan, ask the user now (AskUserQuestion when it's available). For the rest, state the assumption you're taking.
-2. Research in proportion to the change: read the files that change and their direct callers and tests, then stop once you can write concrete steps. Skip what you already read in this conversation. Follow existing patterns, conventions and test setup rather than inventing new ones.
+2. Research in proportion to the change: read the files that change and their direct callers and tests, then stop once you can write concrete steps. Skip what you already read in this conversation. Hand broad searches (where something lives, what uses it, across many files) to `explorer` and read only the files it points to. Follow existing patterns, conventions and test setup rather than inventing new ones.
 3. When the right approach isn't obvious, weigh at least two; pick one and say why in a line.
 4. Write the plan.
 5. Hand off: go on with the `build` skill, unless the plan has a risk the user should approve first (breaking change, migration, anything irreversible). Then ask before building.

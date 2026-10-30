@@ -8,7 +8,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 
 | Agent | Model | Effort | Tools | Use it for |
 |---|---|---|---|---|
-| `explorer` | sonnet | medium | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
+| `explorer` | haiku | medium | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
 | `reviewer` | opus | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
 
 "Read-only" for agents with Bash is an instruction in the prompt, not enforced by permissions.
