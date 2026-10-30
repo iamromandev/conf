@@ -13,7 +13,7 @@ No fix without a root cause you can state and back with evidence.
 3. Check what changed: `git log`, `git diff`, dependency, config and environment changes.
 4. Trace backward from the symptom to where the bad value or state first appears. Fix it there, not where it surfaces.
 5. Form one specific hypothesis and test it with the smallest experiment that could disprove it (a log line, an assertion, a minimal input). Change one thing at a time.
-6. Fix:
+6. Fix, test-first (the `tdd` skill):
    - write a test that reproduces the bug and fails
    - make the minimal fix at the root cause
    - run that test and the related suite
@@ -21,6 +21,7 @@ No fix without a root cause you can state and back with evidence.
 
 ## Rules
 - No shotgun changes: don't try several fixes at once to see what sticks.
+- Hand broad digging to `explorer` (long logs, searching many files for where a value is set or a call comes from); keep the hypotheses, experiments and fix here.
 - Remove temporary logging and debug code before finishing.
 - If the fix is non-trivial (several files, design change), use the `blueprint` skill, then `build`, then `reviewer`, as CLAUDE.md describes.
 

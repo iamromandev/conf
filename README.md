@@ -8,8 +8,8 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 
 | Agent | Model | Effort | Tools | Use it for |
 |---|---|---|---|---|
-| `explorer` | haiku | low | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
-| `reviewer` | sonnet | medium | read-only | Reviewing a non-trivial change for bugs, security and design issues |
+| `explorer` | haiku | medium | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
+| `reviewer` | opus | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
 
 "Read-only" for agents with Bash is an instruction in the prompt, not enforced by permissions.
 
@@ -27,20 +27,21 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 
 ### `CLAUDE.md`
 
-A "Claude Code subagents" section that tells the main conversation when to use each agent and skill, and what to pass between them. `spec`, `blueprint` and `build` were agents (`specifier`, `planner`, `builder`); as skills they run one after another in the main conversation, which skips each agent's cold start and re-reading, and lets them ask you questions directly. Subagents load CLAUDE.md too (except the built-in `Explore` and `Plan`), so it also tells them to do their own task and report back instead of following the routing themselves.
+A "Claude Code subagents" section that tells the main conversation when to use each agent and skill, and what to pass between them. `spec`, `blueprint` and `build` are skills, so they run one after another in the main conversation, which skips a subagent's cold start and re-reading, and lets them ask you questions directly. Subagents load CLAUDE.md too (except the built-in `Explore` and `Plan`), so it also tells them to do their own task and report back instead of following the routing themselves.
 
 ## Workflow
 
 ```
 small, obvious change      → do it directly
-vague request              → scope (with you) → spec → blueprint → build → reviewer
-clear, non-trivial change  → blueprint → build → reviewer
-something broken           → inspect → small fix directly, or blueprint → build → reviewer
+vague request              → scope (with you) → spec → blueprint → build (tdd) → reviewer
+clear, non-trivial change  → blueprint → build (tdd) → reviewer
+something broken           → inspect → fix test-first (tdd), or blueprint → build (tdd) → reviewer
 reviewer finds issues      → build → reviewer again (max 1 round)
 before saying "done"       → check
 git, only when you ask     → branch → commit → PR → merge (+ cleanup, issue to Done)
 ```
 
+- `build` and `inspect` write code test-first with `tdd`: a failing test, then the code that makes it pass. Small, obvious changes skip it, along with the rest of the workflow.
 - `scope`, `spec`, `blueprint` and `build` run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
 - `reviewer` is still a subagent, so it reviews the change with fresh eyes. It gets the plan, the build report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
 - If `reviewer` reports any Critical or Should-fix finding, whatever its verdict (so "Approve with changes" counts too), Claude fixes them with `build` and runs `reviewer` again, which checks each finding was fixed. Nits alone don't start a fix round. After 1 round Claude stops and reports to you.
@@ -80,23 +81,17 @@ To update later, pull the latest version and run the installer again the same wa
 git -C ~/conf pull
 ```
 
-**Installs from before `spec-writer` was renamed to `specifier`** (they have `.claude/agents/spec-writer.md`) aren't upgraded cleanly. The installer updates the section but keeps its two old lines that name `spec-writer`, after the new section, and leaves `agents/spec-writer.md` in place, so Claude Code loads both agents. To upgrade one, run the installer, then delete the two `spec-writer` lines it leaves right after the `<!-- conf: end of section -->` comment (the diff it prints shows them), the old `<!-- claude-conf: end of section -->` line if there is one (installs from before the package was renamed to conf), and `agents/spec-writer.md`.
-
-**Installs from before `specifier`, `planner` and `builder` became skills** keep the old routing lines that name them, after the new section, because the package ships no `old-sections/` for that wording. The installer moves the three agents to the backup folder itself. To finish the upgrade, delete the old lines it leaves right after the `<!-- conf: end of section -->` comment; the diff it prints shows them.
-
 The script:
 - Copies the agents and skills, skipping any that are already identical.
-- Moves `agents/builder.md`, `agents/planner.md` and `agents/specifier.md`, which earlier versions installed, to the backup folder, since they're now skills. An agent of yours with one of those names is moved too.
-- Moves any agent or skill it replaces to `.claude/conf-backup-<timestamp>/`. Nothing is deleted.
+- Replaces any installed agent or skill that differs from the package's, with no backup, so edits you made to one are lost. A skill folder is replaced whole, files you added to it included. Run with `--dry-run` first to see what would be replaced.
 - Replaces the "Claude Code subagents" section of CLAUDE.md and leaves the rest alone, or adds the section at the end if it's missing. It prints a diff of the change and keeps no backup of the previous file.
-  - It recognizes the section by its content: the heading, followed by lines from this package's section, or from an earlier wording saved in `old-sections/` (see "Editing the files" below). Code blocks around it don't matter.
-  - Only the package's own lines are replaced. Any other line under the old section, such as a bullet or `@import` you added, a rule you edited or a `###` subsection, is kept where it is, so it ends up after the new section. Several copies of the section are merged into one.
-  - The section ends with a `<!-- conf: end of section -->` comment (Claude Code drops HTML comments, so it costs nothing), and the installed section is taken to run to that comment. Without it (if it was deleted, or the section was pasted without its last line), it runs to the next `#` or `##` heading, and a `#` line inside a code block counts too.
-  - It warns about lines of the package's section it finds outside the section, such as old bullets under a heading you edited or after a `#` line, so you can delete leftovers.
-  - A "Claude Code subagents" heading with none of the package's lines under it, such as a much older or heavily edited copy or an example of yours, is left alone. The section is added as usual, and the script warns about that line on every run until you delete or rename it.
+  - The section runs from the `## Claude Code subagents` heading to the `<!-- conf: end of section -->` comment (Claude Code drops HTML comments, so it costs nothing). Everything in between is replaced, so keep your own rules and `@import`s outside it; lines before and after it are kept as they are. Code blocks aren't parsed, so a heading and end comment inside one count too.
+  - A "Claude Code subagents" heading with no end comment after it, or with a `#` or `##` heading before its end comment, such as an older copy or an example of yours, is left alone. The section is added at the end, and the script warns about that line on every run until you delete or rename it.
+  - If CLAUDE.md has more than one copy of the section, only the first is updated, and the script warns about the others so you can delete them.
+  - Windows line endings and a byte order mark in your CLAUDE.md are kept.
   - If CLAUDE.md needs a change but it or its folder isn't writable, it stops before changing anything, agents and skills included.
   - With `--project`, it uses `./CLAUDE.md`, or `./.claude/CLAUDE.md` if that's where the project keeps it.
-- Warns if another CLAUDE.md it can see (yours in `~/.claude`, or the current folder's) also has the section, or an older or edited copy of it, since Claude Code loads all of them.
+- Warns if another CLAUDE.md it can see (yours in `~/.claude`, or the current folder's) also has the section, or a heading of it without the end comment, since Claude Code loads all of them.
 - Warns if the superpowers plugin is still enabled in your settings. Uninstall it with `/plugin` in Claude Code; its brainstorming and debugging skills overlap with `scope` and `inspect`.
 
 Running it again is safe: unchanged files are reported as unchanged.
@@ -107,19 +102,19 @@ Running it again is safe: unchanged files are reported as unchanged.
 
 If you change an agent's or skill's `description`, keep it plain, unquoted text that starts with a letter. Avoid ` #`: YAML reads it as the start of a comment, so the rest of the description is silently dropped. Avoid a colon followed by a space (e.g. "step by step: write…") or at the end, too, which isn't valid YAML. If you need either, wrap the description in single quotes and double any apostrophe inside (`it''s`). Don't wrap it in double quotes: `explorer`'s and `scope`'s descriptions contain double quotes, so the frontmatter would stop parsing. Claude Code then skips the agent, or loads the skill without a description.
 
-`CLAUDE.md` must start with the `## Claude Code subagents` heading, end with the end-of-section comment, and have no other headings or end-of-section comments; the installer stops if it doesn't. The installer recognizes an installed section by its lines, so before you reword or remove a line, save the current `CLAUDE.md` in an `old-sections/` folder next to it (e.g. as `old-sections/2026-11.md`). The installer reads every file there, so installs of the old wording are still recognized and updated, instead of being kept as your own lines. Until a line is reworded the package ships no `old-sections/` folder, and `tests/regress.sh` checks that (P5), so update that check when you add one. Leave the end-of-section comment itself as it is (`END_MARK` in `install.sh`): the installer finds where an installed section ends by it.
+`CLAUDE.md` must start with the `## Claude Code subagents` heading, end with the end-of-section comment, and have no other headings or end-of-section comments; the installer stops if it doesn't. Reword, add or remove lines freely: installs get the new wording on their next run, since the whole section is replaced. Leave the heading and the end-of-section comment as they are (`HEADING` and `END_MARK` in `install.sh`): the installer finds installed sections by them.
 
 ### Manual install
 
-Copy `agents/*.md` to `~/.claude/agents/`, each folder in `skills/` to `~/.claude/skills/`, and paste `CLAUDE.md`, including its last line (the end-of-section comment), into your own CLAUDE.md in place of any existing "Claude Code subagents" section. If an older install left `agents/spec-writer.md`, `agents/specifier.md`, `agents/planner.md` or `agents/builder.md`, delete them, since they're now the `spec`, `blueprint` and `build` skills.
+Copy `agents/*.md` to `~/.claude/agents/`, each folder in `skills/` to `~/.claude/skills/`, and paste `CLAUDE.md`, including its last line (the end-of-section comment), into your own CLAUDE.md in place of any existing "Claude Code subagents" section.
 
 ## Undo
 
-Move the files back from `.claude/conf-backup-<timestamp>/` (in `~/.claude` or your project), and delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-- conf: end of section -->` comment). Then delete the installed agents and skills you no longer want.
+Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-- conf: end of section -->` comment), and the installed agents and skills you no longer want. The installer keeps no backups of what it replaced.
 
 ## Tests
 
-`tests/regress.sh` runs `install.sh` through about 115 checks: fresh installs and re-runs, `--dry-run`, `--project`, updating an installed section with your own lines around and inside it, with or without its end-of-section comment and after a line is reworded, and CLAUDE.md edge cases such as code blocks, other "Claude Code subagents" headings, Windows line endings and byte order marks. It compares the resulting files byte for byte.
+`tests/regress.sh` runs `install.sh` through about 100 checks: fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other.
 
 ```bash
 bash tests/regress.sh
@@ -135,4 +130,4 @@ The names avoid clashes with Claude Code's built-ins:
 - `reviewer`, not `review`, because of the built-in `/review` command.
 - `inspect`, not `debug`, and `check`, not `verify`, because `/debug` and `/verify` are built-in.
 
-Because `explorer` doesn't replace the built-in `Explore`, Claude can still use `Explore` on its own, which may run on a larger model than haiku and returns its own report format. That's an accepted trade-off for consistent `-er` names; naming the agent `Explore` instead would make your haiku version replace the built-in everywhere.
+Because `explorer` doesn't replace the built-in `Explore`, Claude can still use `Explore` on its own, which may run on a different model and returns its own report format. That's an accepted trade-off for consistent `-er` names; naming the agent `Explore` instead would make your version replace the built-in everywhere.
