@@ -50,14 +50,26 @@ out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && o
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/reviewer.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
-printf '%s\n' "$out" | grep -q '^would back up  *agents/reviewer.md$' && ok "B2 --dry-run says it would back up a changed agent" || bad B2 "no 'would back up' line: $(printf '%s' "$out" | grep -m1 reviewer)"
+printf '%s\n' "$out" | grep -q '^would replace  *agents/reviewer.md$' && ok "B2 --dry-run says it would replace a changed agent" || bad B2 "no 'would replace' line: $(printf '%s' "$out" | grep -m1 reviewer)"
 H=$(newhome b6); out=$(cd "$H" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "home folder" && ok "B6 --project refused in HOME (exit $rc)" || bad B6 "not refused in HOME (exit $rc)"
 out=$(cd "$PKG" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "that's the conf package itself" && ok "B6 --project refused in package (exit $rc)" || bad B6 "not refused in package (exit $rc)"
 H=$(newhome b7); put "$H" 'abc'; inst "$H" >/dev/null
 same "B7 append after a file with no final newline" "$H/.claude/CLAUDE.md" "$(printf 'abc\n\n%s' "$SEC")"; idem B7 "$H"
-H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/check"; printf 'my edit\n' > "$H/.claude/agents/reviewer.md"; printf 'my skill edit\n' > "$H/.claude/skills/check/SKILL.md"; out=$(inst "$H")
-cmp -s "$PKG/agents/reviewer.md" "$H/.claude/agents/reviewer.md" && [ "$(cat "$H"/.claude/conf-backup-*/agents/reviewer.md)" = 'my edit' ] && printf '%s' "$out" | grep -q '^backed up      agents/reviewer.md$' && printf '%s' "$out" | grep -q '^Backups are in ' && ok "B8 a changed agent is replaced, the old copy moved to the conf-backup folder" || bad B8 "not backed up: $(printf '%s' "$out" | grep -m1 reviewer)"
-[ "$(cat "$H"/.claude/conf-backup-*/skills/check/SKILL.md)" = 'my skill edit' ] && diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && printf '%s' "$out" | grep -q '^backed up      skills/check$' && ok "B8 a changed skill folder is replaced, the old copy moved to the conf-backup folder" || bad B8 "skill not backed up: $(printf '%s' "$out" | grep -m1 skills/check)"
+H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/check"; printf 'my edit\n' > "$H/.claude/agents/reviewer.md"; printf 'my skill edit\n' > "$H/.claude/skills/check/SKILL.md"; printf 'mine\n' > "$H/.claude/skills/check/extra.md"
+chmod a-w "$H/.claude/agents/reviewer.md"; out=$(inst "$H")
+cmp -s "$PKG/agents/reviewer.md" "$H/.claude/agents/reviewer.md" && printf '%s' "$out" | grep -q '^replaced       agents/reviewer.md$' && ok "B8 a changed agent is replaced in place, even if it's read-only" || bad B8 "not replaced: $(printf '%s' "$out" | grep -m1 reviewer)"
+diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && printf '%s' "$out" | grep -q '^replaced       skills/check$' && ok "B8 a changed skill folder is replaced whole, extra files included" || bad B8 "skill not replaced: $(printf '%s' "$out" | grep -m1 skills/check)"
+if ls -d "$H"/.claude/conf-backup-* >/dev/null 2>&1 || printf '%s' "$out" | grep -qi 'backup'; then bad B8 "a backup was made: $(ls "$H/.claude")"; else ok "B8 nothing is backed up"; fi
+if [ "$(id -u)" != 0 ]; then
+  H=$(newhome b10); mkdir -p "$H/.claude/skills/check"; printf 'my skill edit\n' > "$H/.claude/skills/check/SKILL.md"; chmod -R a-w "$H/.claude/skills/check"; out=$(inst "$H"); rc=$?; chmod -R u+w "$H/.claude/skills"
+  [ $rc = 0 ] && diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && ok "B10 a read-only skill folder is replaced too" || bad B10 "rc=$rc $(printf '%s' "$out" | grep -m1 -i 'rm:\|error')"
+else
+  echo "skip B10 read-only skill folder (running as root)"
+fi
+H=$(newhome b11); mkdir -p "$T/b11-mine" "$H/.claude/skills"; printf 'keep\n' > "$T/b11-mine/KEEP"; ln -s "$T/b11-mine" "$H/.claude/skills/check"; inst "$H" >/dev/null
+[ ! -L "$H/.claude/skills/check" ] && diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && [ "$(ls "$T/b11-mine")" = KEEP ] && ok "B11 a symlinked skill folder is replaced by a copy, the folder it pointed to untouched" || bad B11 "link=$([ -L "$H/.claude/skills/check" ] && echo yes || echo no) target=$(ls "$T/b11-mine" | tr '\n' ' ')"
+H=$(newhome b12); mkdir -p "$H/.claude/agents"; printf 'mine\n' > "$T/b12-mine.md"; ln -s "$T/b12-mine.md" "$H/.claude/agents/reviewer.md"; inst "$H" >/dev/null
+[ ! -L "$H/.claude/agents/reviewer.md" ] && cmp -s "$PKG/agents/reviewer.md" "$H/.claude/agents/reviewer.md" && [ "$(cat "$T/b12-mine.md")" = mine ] && ok "B12 a symlinked agent file is replaced by a copy, the file it pointed to untouched" || bad B12 "link=$([ -L "$H/.claude/agents/reviewer.md" ] && echo yes || echo no) target=$(cat "$T/b12-mine.md" | head -1)"
 H=$(newhome b9); put "$H" '# Mine\n\nstuff\n'; inst "$H" >/dev/null
 same "B9 section appended to a file without one" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\nstuff\n\n%s' "$SEC")"; idem B9 "$H"
 

@@ -7,8 +7,8 @@
 #              The section goes in ./CLAUDE.md, or ./.claude/CLAUDE.md if the project keeps it there
 #   --dry-run  show what would change, including a diff of CLAUDE.md, without touching anything
 #
-# Agents and skills it replaces are moved to a timestamped backup folder, never deleted.
-# CLAUDE.md is updated in place, with no backup; the diff it prints shows what changed.
+# Agents and skills that differ from the package's are overwritten, and CLAUDE.md is updated in
+# place, all with no backup; --dry-run lists what would change, with a diff of CLAUDE.md.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -29,8 +29,6 @@ HEADING='## Claude Code subagents'
 # and it shows where the section ends.
 END_MARK='<!-- conf: end of section -->'
 SECTION="$SRC/CLAUDE.md"
-STAMP="$(date +%Y%m%d-%H%M%S)"
-BACKED_UP=0
 
 # awk helpers for reading a CLAUDE.md, shared by md_plan, the section update and the check of the
 # package's own section; see md_awk. Each line arrives as `line`, without trailing spaces, its
@@ -138,7 +136,6 @@ else
   DEST="$HOME/.claude"
   CLAUDE_MD="$DEST/CLAUDE.md"
 fi
-BACKUP="$DEST/conf-backup-$STAMP"
 
 run() {
   if [ "$DRY_RUN" = 0 ]; then "$@"; fi
@@ -151,7 +148,7 @@ say() {
   if [ "$DRY_RUN" = 1 ]; then
     case "$verb" in
       installed) verb="would install" ;;
-      "backed up") verb="would back up" ;;
+      replaced) verb="would replace" ;;
       updated) verb="would update" ;;
       appended) verb="would append" ;;
       created) verb="would create" ;;
@@ -160,14 +157,18 @@ say() {
   printf '%-14s %s\n' "$verb" "$*"
 }
 
-# Move an existing file or folder under DEST into the backup folder, keeping its relative path.
-backup() {
-  local path="$1" rel="${1#"$DEST"/}"
-  [ -e "$path" ] || return 0
-  run mkdir -p "$BACKUP/$(dirname "$rel")"
-  run mv "$path" "$BACKUP/$rel"
-  BACKED_UP=1
-  say "backed up" "$rel"
+# Remove an installed file or folder under DEST before a fresh copy goes in, so a skill folder
+# keeps no stale files and a symlink is replaced rather than written through. Sets `copied` to
+# replaced, or installed if there was nothing there.
+clear_target() {
+  if [ -e "$1" ] || [ -L "$1" ]; then
+    # A folder copied from a read-only checkout is read-only too; never chmod through a symlink
+    if [ -d "$1" ] && [ ! -L "$1" ]; then run chmod -R u+w "$1"; fi
+    run rm -rf -- "$1"
+    copied=replaced
+  else
+    copied=installed
+  fi
 }
 
 # Show a diff of CLAUDE.md, indented and without diff's file-name header.
@@ -234,10 +235,10 @@ for f in "$SRC"/agents/*.md; do
   rel="agents/$(basename "$f")"
   target="$DEST/$rel"
   if [ -f "$target" ] && cmp -s "$f" "$target"; then say unchanged "$rel"; continue; fi
-  backup "$target"
+  clear_target "$target"
   run mkdir -p "$DEST/agents"
   run cp "$f" "$target"
-  say installed "$rel"
+  say "$copied" "$rel"
 done
 
 # Skills
@@ -245,10 +246,10 @@ for d in "$SRC"/skills/*/; do
   rel="skills/$(basename "$d")"
   target="$DEST/$rel"
   if [ -d "$target" ] && diff -rq "$d" "$target" >/dev/null 2>&1; then say unchanged "$rel"; continue; fi
-  backup "$target"
+  clear_target "$target"
   run mkdir -p "$DEST/skills"
   run cp -R "${d%/}" "$target"
-  say installed "$rel"
+  say "$copied" "$rel"
 done
 
 # CLAUDE.md, as worked out above
@@ -298,6 +299,5 @@ echo
 if [ "$DRY_RUN" = 1 ]; then
   echo "Dry run finished. Run again without --dry-run to apply."
 else
-  if [ "$BACKED_UP" = 1 ]; then echo "Backups are in $BACKUP"; fi
   echo "Done. Start a new Claude Code session to load the changes."
 fi
