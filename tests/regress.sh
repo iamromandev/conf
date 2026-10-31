@@ -44,9 +44,9 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 5 ] && ok "B1 fresh install copies 3 agents, 5 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 8 ] && ok "B1 fresh install copies 3 agents, 8 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 9 ] && ok "B1 rerun reports 9 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 12 ] && ok "B1 rerun reports 12 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
@@ -240,7 +240,7 @@ hits=$(cd "$PKG" && grep -nE "$legacy|[b]uild (report|skill)" README.md install.
 # The agents only get the build checks: critic's prompt names its role (code review) with a word on the list above
 hits="$hits$(cd "$PKG" && grep -nE '`[b]uild`|[b]uild (report|skill)' agents/*.md)"
 [ -z "$hits" ] && ok "Q11 no earlier names or upgrade paths are left" || bad Q11 "$(printf '%s' "$hits" | head -3 | cut -c1-80)"
-[ "$(ls "$PKG/skills" | tr '\n' ' ')" = "check foreman inspect ship tdd " ] && ok "Q12 the package ships exactly the skills check, foreman, inspect, ship and tdd" || bad Q12 "skills/ holds: $(ls "$PKG/skills" | tr '\n' ' ')"
+[ "$(ls "$PKG/skills" | tr '\n' ' ')" = "blueprint check foreman inspect scope ship spec tdd " ] && ok "Q12 the package ships exactly the skills blueprint, check, foreman, inspect, scope, ship, spec and tdd" || bad Q12 "skills/ holds: $(ls "$PKG/skills" | tr '\n' ' ')"
 grep '^- Mechanical changes' "$PKG/CLAUDE.md" | grep '`foreman`' | grep '`critic`' | grep 'logic, security, auth or data' | grep -q 'keeps the meaning' && ok "Q13 mechanical changes skip foreman and critic, unless they touch logic, security, auth or data" || bad Q13 "no mechanical-changes route with its limits"
 s="$PKG/agents/smith.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
 for t in Edit Write Bash; do printf '%s\n' "$fm" | grep '^tools:' | grep -q "$t" || missing="$missing [tools: $t]"; done
@@ -270,7 +270,7 @@ grep '^- Non-trivial change' "$c" | grep -qF 'multi-file' && missing="$missing [
 [ -z "$missing" ] && ok "Q17 CLAUDE.md sends non-trivial work to foreman and keeps subagents out of it" || bad Q17 "CLAUDE.md:$missing"
 missing=""
 has() { grep -qF -- "$2" "$PKG/$1" 2>/dev/null || missing="$missing [$1: $2]"; }
-has skills/foreman/SKILL.md '**Acceptance criteria**'; has skills/foreman/SKILL.md '**Phases**'; has skills/foreman/SKILL.md '**Goals / Non-goals**'; has skills/foreman/SKILL.md 'one question at a time'
+has skills/blueprint/SKILL.md '**Acceptance criteria**'; has skills/blueprint/SKILL.md '**Phases**'; has skills/spec/SKILL.md '**Goals / Non-goals**'; has skills/scope/SKILL.md 'one question at a time'
 has skills/inspect/SKILL.md '`foreman`'
 has agents/smith.md "The plan doesn't hold"; has agents/smith.md 'acceptance criteria'
 has agents/critic.md '**Acceptance criteria**'; has agents/critic.md '[plan]'
@@ -278,7 +278,7 @@ has skills/ship/SKILL.md 'status.md'
 grep -q '^| `foreman` |' "$PKG/README.md" || missing="$missing [README foreman row]"
 has README.md 'docs/conf/tasks/<slug>/'; has README.md '/foreman <slug>'
 # the dropped skills and their slash commands are named nowhere (this file is left out, since it names them)
-hits=$(cd "$PKG" && grep -nE '(^|[ `(])/(critic|scout|smith)\b|`scope` skill|`(scope|spec|blueprint)`' CLAUDE.md README.md agents/*.md skills/*/SKILL.md)
+hits=$(cd "$PKG" && grep -nE '(^|[ `(])/(critic|scout|smith)\b' CLAUDE.md README.md agents/*.md skills/*/SKILL.md)
 [ -z "$hits" ] || missing="$missing [still names a dropped skill or its slash command: $(printf '%s' "$hits" | head -2 | cut -c1-60 | tr '\n' ' ')]"
 [ -z "$missing" ] && ok "Q18 acceptance criteria and plan-level findings are named in foreman, smith, critic, inspect, ship and the README, and no dropped skill is named" || bad Q18 "missing:$missing"
 
@@ -299,6 +299,26 @@ has skills/foreman/SKILL.md "belongs to that task"; has skills/foreman/SKILL.md 
 has skills/ship/SKILL.md 'docs/conf/tasks/*/status.md'; has skills/ship/SKILL.md '`docs/conf/tasks/` is never committed'; has skills/ship/SKILL.md '`- Parent:`'
 [ -z "$missing" ] && ok "Q19 foreman orders its start, resumes safely and completes the fix round; ship finds status.md; foreman sends a plan that doesn't hold back to the plan" || bad Q19 "missing:$missing"
 
+# scope, spec and blueprint are foreman's steps, loadable on their own
+missing=""; f="$PKG/skills/foreman/SKILL.md"
+for n in scope spec blueprint; do
+  s="$PKG/skills/$n/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null)
+  [ "$(sed -n 1p "$s" 2>/dev/null)" = '---' ] && [ "$(printf '%s\n' "$fm" | tail -n 1)" = '---' ] || missing="$missing [$n: frontmatter between --- lines]"
+  printf '%s\n' "$fm" | grep -qx "name: $n" || missing="$missing [$n: name]"
+  printf '%s\n' "$fm" | grep -q '^description: .' || missing="$missing [$n: description]"
+  printf '%s\n' "$fm" | grep -qE '^(disable-model-invocation|context|agent):' && missing="$missing [$n: sets disable-model-invocation, context or agent]"
+  sed '1,/^---$/d' "$s" 2>/dev/null | grep -qF '/foreman' || missing="$missing [$n: names /foreman]"
+  printf '%s\n' "$fm" | grep '^description: ' | grep -qE ': .*: | #|:$' && missing="$missing [$n: description is not plain YAML]"
+  grep -qF "\`$n\`" "$f" 2>/dev/null || missing="$missing [foreman names \`$n\`]"
+done
+has skills/scope/SKILL.md 'vague'; has skills/scope/SKILL.md 'Play it back'
+has skills/spec/SKILL.md 'spec.md'
+has skills/blueprint/SKILL.md 'plan.md'; has skills/blueprint/SKILL.md 'smith'
+has skills/foreman/SKILL.md 'already agreed'
+for t in '^## Scope' '^## Spec' '^## Plan' '**Goals / Non-goals**' 'one question at a time'; do grep -qE -- "$t" "$f" 2>/dev/null && missing="$missing [foreman still has: $t]"; done
+[ "$(wc -c < "$f")" -lt 9000 ] || missing="$missing [foreman is 9000 bytes or more]"
+[ -z "$missing" ] && ok "Q21 scope, spec and blueprint are model-invocable inline skills that point to /foreman, and foreman loads them instead of holding their text" || bad Q21 "missing:$missing"
+
 echo "== Skills the package no longer ships"
 # Real copies of the dropped skills come from the package's git history
 old=""; new=""
@@ -311,39 +331,39 @@ if [ -z "$old" ]; then
 else
   # plant <home> <name> [commit]: an installed copy of a dropped skill as the package shipped it
   plant() { mkdir -p "$1/.claude/skills/$2"; git -C "$PKG" show "${3:-$old}:skills/$2/SKILL.md" > "$1/.claude/skills/$2/SKILL.md"; }
-  H=$(newhome q20a); inst "$H" >/dev/null; plant "$H" scope; plant "$H" smith; out=$(inst "$H"); rc=$?
-  [ $rc = 0 ] && [ ! -e "$H/.claude/skills/scope" ] && [ ! -e "$H/.claude/skills/smith" ] && printf '%s\n' "$out" | grep -q '^removed .*skills/scope' && printf '%s\n' "$out" | grep -q '^removed .*skills/smith' && ok "Q20 unedited copies of dropped skills are removed, and the output says so" || bad Q20 "rc=$rc left=$(ls "$H/.claude/skills" | tr '\n' ' ') output: $(printf '%s' "$out" | grep -m1 'scope')"
-  [ "$(ls "$H/.claude/skills" | tr '\n' ' ')" = "check foreman inspect ship tdd " ] && ok "Q20 the skills the package ships stay" || bad Q20 "skills: $(ls "$H/.claude/skills" | tr '\n' ' ')"
-  out=$(inst "$H"); printf '%s\n' "$out" | grep -qE '^(removed|would remove|warning) .*skills/(scope|spec|blueprint|critic|scout|smith)' && bad Q20 "second run: $(printf '%s' "$out" | grep -m1 skills/)" || ok "Q20 a second run says nothing about dropped skills"
-  H=$(newhome q20b); inst "$H" >/dev/null; plant "$H" scope; plant "$H" smith; a=$(treesum "$H"); out=$(inst "$H" "" --dry-run)
-  [ "$a" = "$(treesum "$H")" ] && [ -f "$H/.claude/skills/scope/SKILL.md" ] && printf '%s\n' "$out" | grep -q '^would remove .*skills/scope' && ok "Q20 --dry-run says it would remove them, and removes nothing" || bad Q20 "dry run: changed=$([ "$a" = "$(treesum "$H")" ] && echo no || echo yes) output: $(printf '%s' "$out" | grep -m1 'scope')"
-  H=$(newhome q20c); inst "$H" >/dev/null; plant "$H" scope; printf 'my line\n' >> "$H/.claude/skills/scope/SKILL.md"; out=$(inst "$H"); rc=$?
-  [ $rc = 0 ] && grep -q 'my line' "$H/.claude/skills/scope/SKILL.md" && printf '%s\n' "$out" | grep -q '^warning .*skills/scope.*differs from every copy this package shipped' && ! printf '%s\n' "$out" | grep -q '^removed' && ok "Q20 an edited copy is kept, with a warning" || bad Q20 "edited: rc=$rc output: $(printf '%s' "$out" | grep -m1 'scope')"
-  H=$(newhome q20d); inst "$H" >/dev/null; plant "$H" scope; printf 'mine\n' > "$H/.claude/skills/scope/notes.md"; out=$(inst "$H"); rc=$?
-  [ $rc = 0 ] && [ -f "$H/.claude/skills/scope/notes.md" ] && [ -f "$H/.claude/skills/scope/SKILL.md" ] && printf '%s\n' "$out" | grep -q '^warning .*skills/scope' && ok "Q20 a copy with an extra file is kept, with a warning" || bad Q20 "extra file: rc=$rc output: $(printf '%s' "$out" | grep -m1 'scope')"
-  H=$(newhome q20e); inst "$H" >/dev/null; mkdir -p "$T/q20-mine"; git -C "$PKG" show "$old:skills/spec/SKILL.md" > "$T/q20-mine/SKILL.md"; ln -s "$T/q20-mine" "$H/.claude/skills/spec"; out=$(inst "$H"); rc=$?
-  [ $rc = 0 ] && [ -L "$H/.claude/skills/spec" ] && [ -f "$T/q20-mine/SKILL.md" ] && printf '%s\n' "$out" | grep -q '^warning .*skills/spec' && ok "Q20 a symlinked folder and its target are kept, with a warning" || bad Q20 "symlink: rc=$rc output: $(printf '%s' "$out" | grep -m1 'spec')"
-  H=$(newhome q20g); inst "$H" >/dev/null; plant "$H" scope; mv "$H/.claude/skills/scope/SKILL.md" "$T/q20-link.md"; ln -s "$T/q20-link.md" "$H/.claude/skills/scope/SKILL.md"; out=$(inst "$H"); rc=$?
-  [ $rc = 0 ] && [ -L "$H/.claude/skills/scope/SKILL.md" ] && [ -f "$T/q20-link.md" ] && printf '%s\n' "$out" | grep -q '^warning .*skills/scope' && ok "Q20 a copy whose SKILL.md is a link is kept, with a warning" || bad Q20 "linked SKILL.md: rc=$rc output: $(printf '%s' "$out" | grep -m1 'scope')"
-  H=$(newhome q20h); inst "$H" >/dev/null; plant "$H" scope; : > "$H/.claude/skills/scope/.DS_Store"; out=$(inst "$H"); rc=$?
-  [ $rc = 0 ] && [ ! -e "$H/.claude/skills/scope" ] && printf '%s\n' "$out" | grep -q '^removed .*skills/scope' && ok "Q20 a copy with only SKILL.md and .DS_Store is removed" || bad Q20 ".DS_Store: rc=$rc left=$(ls -A "$H/.claude/skills/scope" 2>/dev/null | tr '\n' ' ') output: $(printf '%s' "$out" | grep -m1 'scope')"
-  H=$(newhome q20m); inst "$H" >/dev/null; plant "$H" scope; mkdir "$H/.claude/skills/scope/.DS_Store"; : > "$H/.claude/skills/scope/.DS_Store/data"; out=$(inst "$H")
-  [ -f "$H/.claude/skills/scope/.DS_Store/data" ] && printf '%s\n' "$out" | grep -q '^warning .*skills/scope' && ok "Q20 a .DS_Store folder counts as an extra file: kept, with a warning" || bad Q20 ".DS_Store folder removed"
-  P2=$T/pkg-reuse; rm -rf "$P2"; cp -R "$PKG" "$P2"; mkdir -p "$P2/skills/scope"; git -C "$PKG" show "$old:skills/scope/SKILL.md" > "$P2/skills/scope/SKILL.md"
+  H=$(newhome q20a); inst "$H" >/dev/null; plant "$H" scout; plant "$H" smith; out=$(inst "$H"); rc=$?
+  [ $rc = 0 ] && [ ! -e "$H/.claude/skills/scout" ] && [ ! -e "$H/.claude/skills/smith" ] && printf '%s\n' "$out" | grep -q '^removed .*skills/scout' && printf '%s\n' "$out" | grep -q '^removed .*skills/smith' && ok "Q20 unedited copies of dropped skills are removed, and the output says so" || bad Q20 "rc=$rc left=$(ls "$H/.claude/skills" | tr '\n' ' ') output: $(printf '%s' "$out" | grep -m1 'scout')"
+  [ "$(ls "$H/.claude/skills" | tr '\n' ' ')" = "blueprint check foreman inspect scope ship spec tdd " ] && ok "Q20 the skills the package ships stay" || bad Q20 "skills: $(ls "$H/.claude/skills" | tr '\n' ' ')"
+  out=$(inst "$H"); printf '%s\n' "$out" | grep -qE '^(removed|would remove|warning) .*skills/(critic|scout|smith)' && bad Q20 "second run: $(printf '%s' "$out" | grep -m1 skills/)" || ok "Q20 a second run says nothing about dropped skills"
+  H=$(newhome q20b); inst "$H" >/dev/null; plant "$H" scout; plant "$H" smith; a=$(treesum "$H"); out=$(inst "$H" "" --dry-run)
+  [ "$a" = "$(treesum "$H")" ] && [ -f "$H/.claude/skills/scout/SKILL.md" ] && printf '%s\n' "$out" | grep -q '^would remove .*skills/scout' && ok "Q20 --dry-run says it would remove them, and removes nothing" || bad Q20 "dry run: changed=$([ "$a" = "$(treesum "$H")" ] && echo no || echo yes) output: $(printf '%s' "$out" | grep -m1 'scout')"
+  H=$(newhome q20c); inst "$H" >/dev/null; plant "$H" scout; printf 'my line\n' >> "$H/.claude/skills/scout/SKILL.md"; out=$(inst "$H"); rc=$?
+  [ $rc = 0 ] && grep -q 'my line' "$H/.claude/skills/scout/SKILL.md" && printf '%s\n' "$out" | grep -q '^warning .*skills/scout.*differs from every copy this package shipped' && ! printf '%s\n' "$out" | grep -q '^removed' && ok "Q20 an edited copy is kept, with a warning" || bad Q20 "edited: rc=$rc output: $(printf '%s' "$out" | grep -m1 'scout')"
+  H=$(newhome q20d); inst "$H" >/dev/null; plant "$H" scout; printf 'mine\n' > "$H/.claude/skills/scout/notes.md"; out=$(inst "$H"); rc=$?
+  [ $rc = 0 ] && [ -f "$H/.claude/skills/scout/notes.md" ] && [ -f "$H/.claude/skills/scout/SKILL.md" ] && printf '%s\n' "$out" | grep -q '^warning .*skills/scout' && ok "Q20 a copy with an extra file is kept, with a warning" || bad Q20 "extra file: rc=$rc output: $(printf '%s' "$out" | grep -m1 'scout')"
+  H=$(newhome q20e); inst "$H" >/dev/null; mkdir -p "$T/q20-mine"; git -C "$PKG" show "$old:skills/critic/SKILL.md" > "$T/q20-mine/SKILL.md"; ln -s "$T/q20-mine" "$H/.claude/skills/critic"; out=$(inst "$H"); rc=$?
+  [ $rc = 0 ] && [ -L "$H/.claude/skills/critic" ] && [ -f "$T/q20-mine/SKILL.md" ] && printf '%s\n' "$out" | grep -q '^warning .*skills/critic' && ok "Q20 a symlinked folder and its target are kept, with a warning" || bad Q20 "symlink: rc=$rc output: $(printf '%s' "$out" | grep -m1 'critic')"
+  H=$(newhome q20g); inst "$H" >/dev/null; plant "$H" scout; mv "$H/.claude/skills/scout/SKILL.md" "$T/q20-link.md"; ln -s "$T/q20-link.md" "$H/.claude/skills/scout/SKILL.md"; out=$(inst "$H"); rc=$?
+  [ $rc = 0 ] && [ -L "$H/.claude/skills/scout/SKILL.md" ] && [ -f "$T/q20-link.md" ] && printf '%s\n' "$out" | grep -q '^warning .*skills/scout' && ok "Q20 a copy whose SKILL.md is a link is kept, with a warning" || bad Q20 "linked SKILL.md: rc=$rc output: $(printf '%s' "$out" | grep -m1 'scout')"
+  H=$(newhome q20h); inst "$H" >/dev/null; plant "$H" scout; : > "$H/.claude/skills/scout/.DS_Store"; out=$(inst "$H"); rc=$?
+  [ $rc = 0 ] && [ ! -e "$H/.claude/skills/scout" ] && printf '%s\n' "$out" | grep -q '^removed .*skills/scout' && ok "Q20 a copy with only SKILL.md and .DS_Store is removed" || bad Q20 ".DS_Store: rc=$rc left=$(ls -A "$H/.claude/skills/scout" 2>/dev/null | tr '\n' ' ') output: $(printf '%s' "$out" | grep -m1 'scout')"
+  H=$(newhome q20m); inst "$H" >/dev/null; plant "$H" scout; mkdir "$H/.claude/skills/scout/.DS_Store"; : > "$H/.claude/skills/scout/.DS_Store/data"; out=$(inst "$H")
+  [ -f "$H/.claude/skills/scout/.DS_Store/data" ] && printf '%s\n' "$out" | grep -q '^warning .*skills/scout' && ok "Q20 a .DS_Store folder counts as an extra file: kept, with a warning" || bad Q20 ".DS_Store folder removed"
+  P2=$T/pkg-reuse; rm -rf "$P2"; cp -R "$PKG" "$P2"; mkdir -p "$P2/skills/scout"; git -C "$PKG" show "$old:skills/scout/SKILL.md" > "$P2/skills/scout/SKILL.md"
   H=$(newhome q20n); out=$(inst "$H" "$P2")
-  [ -f "$H/.claude/skills/scope/SKILL.md" ] && ! printf '%s\n' "$out" | grep -qE '^(removed|warning) .*skills/scope' && ok "Q20 a dropped name the package ships again is installed, not removed" || bad Q20 "shipped scope removed or warned about"
+  [ -f "$H/.claude/skills/scout/SKILL.md" ] && ! printf '%s\n' "$out" | grep -qE '^(removed|warning) .*skills/scout' && ok "Q20 a dropped name the package ships again is installed, not removed" || bad Q20 "shipped scout removed or warned about"
   # A CLAUDE.md that can't be written stops the install before anything is removed
   if [ "$(id -u)" != 0 ]; then
-    H=$(newhome q20i); inst "$H" >/dev/null; plant "$H" scope; put "$H" '# Mine\n'; chmod a-w "$H/.claude/CLAUDE.md"
+    H=$(newhome q20i); inst "$H" >/dev/null; plant "$H" scout; put "$H" '# Mine\n'; chmod a-w "$H/.claude/CLAUDE.md"
     refused "Q20 a read-only CLAUDE.md that needs a change: refused before a dropped skill is removed" "$H" "can't write"; chmod u+w "$H/.claude/CLAUDE.md"
-    [ -f "$H/.claude/skills/scope/SKILL.md" ] && ok "Q20 the dropped skill is still there after that refusal" || bad Q20 "scope was removed despite the refusal"
+    [ -f "$H/.claude/skills/scout/SKILL.md" ] && ok "Q20 the dropped skill is still there after that refusal" || bad Q20 "scout was removed despite the refusal"
   else
     echo "skip Q20 refusal before removal (running as root)"
   fi
   # Every committed version of a dropped skill is in install.sh's table, and is removed when installed
   table=$(sed -n "/^DROPPED_SUMS='/,/'\$/p" "$PKG/install.sh" | sed "s/^DROPPED_SUMS='//; s/'\$//")
   H=$(newhome q20j); inst "$H" >/dev/null; versions=0; notin=""; kept=""
-  for n in scope spec blueprint critic scout smith; do
+  for n in critic scout smith; do
     for h in $(git -C "$PKG" log --all --format=%H -- "skills/$n/SKILL.md" 2>/dev/null); do
       git -C "$PKG" cat-file -e "$h:skills/$n/SKILL.md" 2>/dev/null || continue
       versions=$((versions + 1)); c=$(git -C "$PKG" show "$h:skills/$n/SKILL.md" | cksum | awk -v n="$n" '{print n, $1, $2}')
@@ -354,8 +374,8 @@ else
   [ "$versions" -gt 0 ] && [ -z "$notin" ] && ok "Q20 all $versions committed versions of the dropped skills are in install.sh's table" || bad Q20 "versions=$versions not in the table:$notin"
   [ "$versions" -gt 0 ] && [ -z "$kept" ] && ok "Q20 each of those versions is removed when installed" || bad Q20 "versions=$versions kept:$kept"
   if [ -n "$new" ]; then
-    H=$(newhome q20f); inst "$H" >/dev/null; plant "$H" blueprint "$new"; plant "$H" scope "$new"; out=$(inst "$H")
-    [ ! -e "$H/.claude/skills/blueprint" ] && [ ! -e "$H/.claude/skills/scope" ] && printf '%s\n' "$out" | grep -q '^removed .*skills/blueprint' && ok "Q20 the newest shipped versions are recognised too" || bad Q20 "newest: $(printf '%s' "$out" | grep -m1 'blueprint')"
+    H=$(newhome q20f); inst "$H" >/dev/null; plant "$H" smith "$new"; out=$(inst "$H")
+    [ ! -e "$H/.claude/skills/smith" ] && printf '%s\n' "$out" | grep -q '^removed .*skills/smith' && ok "Q20 the newest shipped versions are recognised too" || bad Q20 "newest: $(printf '%s' "$out" | grep -m1 'smith')"
   else
     echo "skip Q20 newest shipped versions (commit 7e339b4 isn't in the history)"
   fi

@@ -26,24 +26,12 @@ for arg in "$@"; do
 done
 
 HEADING='## Claude Code subagents'
-# Skills that were folded into foreman or dropped. An installed copy is removed only when its
+# Skills the package dropped. An installed copy is removed only when its
 # SKILL.md matches a version the package shipped (name, then the cksum CRC and size of every
 # committed version), so edits are never lost.
-# Regenerate the table with: for n in scope spec blueprint critic scout smith; do for h in $(git log --all --format=%H -- skills/$n/SKILL.md); do
+# Regenerate the table with: for n in critic scout smith; do for h in $(git log --all --format=%H -- skills/$n/SKILL.md); do
 #   git cat-file -e ${h}:skills/$n/SKILL.md 2>/dev/null && git show ${h}:skills/$n/SKILL.md | cksum | awk -v n=$n '{print n, $1, $2}'; done; done | LC_ALL=C sort -u
-DROPPED_SUMS='scope 1464149793 1671
-scope 1850656964 1731
-scope 2397017297 1677
-scope 444992623 1673
-scope 539014874 1680
-spec 2485795970 2063
-spec 608208590 2132
-blueprint 2435392841 2018
-blueprint 3587188867 1760
-blueprint 3818170450 2582
-blueprint 570604850 1889
-blueprint 580559103 1886
-critic 809818994 614
+DROPPED_SUMS='critic 809818994 614
 scout 4244998468 671
 smith 12583037 601
 smith 3982734297 619
