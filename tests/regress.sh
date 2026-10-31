@@ -44,9 +44,9 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 2 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 9 ] && ok "B1 fresh install copies 2 agents, 9 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 2 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 10 ] && ok "B1 fresh install copies 2 agents, 10 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 12 ] && ok "B1 rerun reports 12 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 13 ] && ok "B1 rerun reports 13 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
@@ -213,7 +213,7 @@ grep -q 'git status --short' "$PKG/agents/critic.md" && ok "Q3 critic checks unt
 if command -v ruby >/dev/null; then
   broken=""
   for f in "$PKG"/agents/*.md "$PKG"/skills/*/SKILL.md; do
-    ruby -ryaml -e 'y = YAML.safe_load(File.read(ARGV[0]).split(/^---\s*$/)[1]); exit(y["name"] && y["description"] ? 0 : 1)' "$f" 2>/dev/null || broken="$broken ${f#"$PKG"/}"
+    ruby -ryaml -e 'y = YAML.safe_load(File.read(ARGV[0], encoding: "UTF-8").split(/^---\s*$/)[1]); exit(y["name"] && y["description"] ? 0 : 1)' "$f" 2>/dev/null || broken="$broken ${f#"$PKG"/}"
   done
   [ -z "$broken" ] && ok "Q5 all agent and skill frontmatter parses (checked with Ruby)" || bad Q5 "frontmatter doesn't parse:$broken"
 else
@@ -223,8 +223,12 @@ fi
 [ "$(tail -n 1 "$PKG/CLAUDE.md")" = "$MARK" ] && ok "Q6 CLAUDE.md ends with the end-of-section comment" || bad Q6 "wrong last line"
 missing=""; for n in $(grep -o '`[a-z-]*`' "$PKG/CLAUDE.md" | tr -d '`' | sort -u); do [ -f "$PKG/agents/$n.md" ] || [ -d "$PKG/skills/$n" ] || missing="$missing $n"; done
 [ -z "$missing" ] && ok "Q7 every agent and skill CLAUDE.md names is in the package" || bad Q7 "not in agents/ or skills/:$missing"
-missing=""; for s in '^- Git work only when I ask' '^- Branch:' '<short-kebab-name>' '^- Commits:' '^- PR:' 'Closes #<issue>' '^- Merge only when' 'squash if more' '^- After merging' 'delete the remote and local branch' 'link to the merged PR'; do grep -q -- "$s" "$PKG/CLAUDE.md" || missing="$missing [$s]"; done
-[ -z "$missing" ] && ok "Q8 CLAUDE.md has every git rule: trigger, branch, commit, PR, merge, cleanup, issue update" || bad Q8 "missing:$missing"
+g="$PKG/skills/ship/SKILL.md"; missing=""
+grep '^- Git work' "$PKG/CLAUDE.md" | grep 'push' | grep 'only when I ask' | grep 'Load the `ship` skill first' | grep -q 'take precedence over the default git instructions where they conflict' || missing="$missing [CLAUDE.md: a git line covering push, only when I ask, loading ship first, taking precedence over the defaults only where they conflict]"
+sed -n 's/^description: //p' "$g" 2>/dev/null | grep -q 'push' || missing="$missing [ship description: push]"
+for s in '<short-kebab-name>' 'Closes #<issue>' 'squash if more'; do grep -q -- "$s" "$PKG/CLAUDE.md" && missing="$missing [CLAUDE.md still has: $s]"; done
+for s in 'Run the `check` skill' '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -q -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
+[ -z "$missing" ] && ok "Q8 the git rules (branch, commit, PR, merge, cleanup, issue update) are in the ship skill, and CLAUDE.md only says to use it when asked" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
 a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: high' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: low' "$a/scout.md" \
   && grep -q '^| `critic` | sonnet | high |' "$PKG/README.md" && grep -q '^| `scout` | haiku | low |' "$PKG/README.md" \
@@ -242,6 +246,7 @@ for n in critic scout; do
   sed '1,/^---$/d' "$s" 2>/dev/null | grep -q '\$ARGUMENTS' || missing="$missing [\$ARGUMENTS in the body]"
   [ -z "$missing" ] && ok "Q12 /$n starts the $n agent: forked, waited for, run only by you, at the agent's model and effort" || bad Q12 "skills/$n/SKILL.md:$missing"
 done
+grep '^- Mechanical changes' "$PKG/CLAUDE.md" | grep '`blueprint`' | grep '`critic`' | grep 'logic, security, auth or data' | grep -q 'keeps the meaning' && ok "Q13 mechanical changes skip blueprint and critic, unless they touch logic, security, auth or data" || bad Q13 "no mechanical-changes route with its limits"
 
 echo
 echo "passed $PASS, failed $FAIL"

@@ -26,29 +26,32 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 | `critic` | Lets you run the `critic` agent yourself with `/critic`, optionally followed by what to review. Claude doesn't use it; it calls the agent directly |
 | `scout` | Lets you run the `scout` agent yourself with `/scout` followed by a question, optionally saying how thoroughly to look. Claude doesn't use it; it calls the agent directly |
 | `check` | Run the real checks and read the output before claiming anything is done, fixed or passing |
+| `ship` | Commits, pushes, opens a PR or merges when you ask, up to the stage you name, following the branch, commit, PR and merge rules, which take precedence over Claude Code's defaults where they conflict |
 
 ### `CLAUDE.md`
 
-A "Claude Code subagents" section that tells the main conversation when to use each agent and skill, and what to pass between them. `spec`, `blueprint` and `build` are skills, so they run one after another in the main conversation, which skips a subagent's cold start and re-reading, and lets them ask you questions directly. Subagents load CLAUDE.md too (except the built-in `Explore` and `Plan`), so it also tells them to do their own task and report back instead of following the routing themselves.
+A "Claude Code subagents" section that tells the main conversation when to use each agent and skill, and what to pass between them. `spec`, `blueprint` and `build` are skills, so they run one after another in the main conversation, which skips a subagent's cold start and re-reading, and lets them ask you questions directly. Subagents load CLAUDE.md too (except the built-in `Explore` and `Plan`), so it also tells them to do their own task and report back instead of following the routing themselves. Because every session and subagent loads it, it stays short: the git rules live in the `ship` skill, which loads only when you ask for git work.
 
 ## Workflow
 
 ```
 small, obvious change      → do it directly
+mechanical change          → do it directly, tests first (renames, config values, wording)
 vague request              → scope (with you) → spec → blueprint → build (tdd) → critic
 clear, non-trivial change  → blueprint → build (tdd) → critic
 something broken           → inspect → fix test-first (tdd), or blueprint → build (tdd) → critic
 critic finds issues        → build → critic again (max 1 round)
 before saying "done"       → check
-git, only when you ask     → branch → commit → PR → merge (+ cleanup, issue to Done)
+git, only when you ask     → ship: branch → commit → PR → merge (+ cleanup, issue to Done)
 ```
 
 - `build` and `inspect` write code test-first with `tdd`: a failing test, then the code that makes it pass. Small, obvious changes skip it, along with the rest of the workflow.
+- Mechanical changes skip `blueprint` and `critic` however many files they touch: renames with every reference updated, config values, doc edits and rewording that keeps the meaning, as long as they don't touch logic, security, auth or data. Claude updates the tests that cover them first, if any, makes the change and runs `check`. A review costs a subagent re-reading the files from scratch, which is rarely worth it for a change with no logic in it.
 - `scope`, `spec`, `blueprint` and `build` run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
 - `critic` is still a subagent, so it reviews the change with fresh eyes. It gets the plan, the build report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
 - To review a change yourself, type `/critic`, optionally followed by what to review: files, a commit range, a plan or an earlier review's findings. The skill starts the `critic` agent in a fresh context, at its model and effort, and waits for its report. Claude never runs that skill itself: it calls the agent directly, so it can raise the model or effort for a risky change.
 - If `critic` reports any Critical or Should-fix finding, whatever its verdict (so "Approve with changes" counts too), Claude fixes them with `build` and runs `critic` again, which checks each finding was fixed. Nits alone don't start a fix round. After 1 round Claude stops and reports to you.
-- Claude commits, opens PRs and merges only when you ask, and stops at the stage you name. It stays on the branch made for the task, or cuts one from the current branch (`123-short-name`, or `fix/short-name` without an issue), writes Conventional Commits that end in `(#123)` when there's an issue, and opens the PR against that parent branch with Summary, Changes and Testing sections. It merges once CI has passed, the branch is rebased onto its base and no review requests changes or has unresolved threads: a rebase merge for 1 commit, a squash merge for more. Then it deletes the remote and local branch, switches back to the parent and pulls. If there's an issue, it closes it or moves it to Done in whatever tracker it lives in (GitHub, Jira, Linear…), unless the merge already did, and comments with a link to the merged PR.
+- Claude commits, opens PRs and merges only when you ask, and stops at the stage you name, following the `ship` skill. It stays on the branch made for the task, or cuts one from the current branch (`123-short-name`, or `fix/short-name` without an issue), writes Conventional Commits that end in `(#123)` when there's an issue, and opens the PR against that parent branch with Summary, Changes and Testing sections. It merges once CI has passed, the branch is rebased onto its base and no review requests changes or has unresolved threads: a rebase merge for 1 commit, a squash merge for more. Then it deletes the remote and local branch, switches back to the parent and pulls. If there's an issue, it closes it or moves it to Done in whatever tracker it lives in (GitHub, Jira, Linear…), unless the merge already did, and comments with a link to the merged PR.
 
 ## Install
 
