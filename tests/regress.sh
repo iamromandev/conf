@@ -44,9 +44,9 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 2 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 10 ] && ok "B1 fresh install copies 2 agents, 10 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 10 ] && ok "B1 fresh install copies 3 agents, 10 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 13 ] && ok "B1 rerun reports 13 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 14 ] && ok "B1 rerun reports 14 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
@@ -231,13 +231,16 @@ for s in 'Run the `check` skill' '^## Branch' '<short-kebab-name>' '^## Commit' 
 [ -z "$missing" ] && ok "Q8 the git rules (branch, commit, PR, merge, cleanup, issue update) are in the ship skill, and CLAUDE.md only says to use it when asked" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
 a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: high' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: low' "$a/scout.md" \
-  && grep -q '^| `critic` | sonnet | high |' "$PKG/README.md" && grep -q '^| `scout` | haiku | low |' "$PKG/README.md" \
-  && ok "Q10 critic is sonnet/high and scout haiku/low, in the agents and README" || bad Q10 "model or effort differs"
+  && grep -qx 'model: sonnet' "$a/smith.md" && grep -qx 'effort: medium' "$a/smith.md" \
+  && grep -q '^| `critic` | sonnet | high |' "$PKG/README.md" && grep -q '^| `scout` | haiku | low |' "$PKG/README.md" && grep -q '^| `smith` | sonnet | medium |' "$PKG/README.md" \
+  && ok "Q10 critic is sonnet/high, scout haiku/low and smith sonnet/medium, in the agents and README" || bad Q10 "model or effort differs"
 # (bracketed so this line doesn't match itself)
-legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf|[r]eviewer|[e]xplorer'
-hits=$(cd "$PKG" && grep -nE "$legacy" README.md install.sh tests/regress.sh CLAUDE.md skills/*/SKILL.md)
+legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf|[r]eviewer|[e]xplorer|`[b]uild`'
+hits=$(cd "$PKG" && grep -nE "$legacy|[b]uild (report|skill)" README.md install.sh tests/regress.sh CLAUDE.md skills/*/SKILL.md)
+# The agents only get the build checks: critic's prompt names its role (code review) with a word on the list above
+hits="$hits$(cd "$PKG" && grep -nE '`[b]uild`|[b]uild (report|skill)' agents/*.md)"
 [ -z "$hits" ] && ok "Q11 no earlier names or upgrade paths are left" || bad Q11 "$(printf '%s' "$hits" | head -3 | cut -c1-80)"
-for n in critic scout; do
+for n in critic scout smith; do
   s="$PKG/skills/$n/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
   [ -f "$PKG/agents/$n.md" ] || missing="$missing [no agents/$n.md]"
   [ "$(sed -n 1p "$s" 2>/dev/null)" = '---' ] && [ "$(printf '%s\n' "$fm" | tail -n 1)" = '---' ] || missing="$missing [frontmatter between --- lines]"
@@ -247,6 +250,12 @@ for n in critic scout; do
   [ -z "$missing" ] && ok "Q12 /$n starts the $n agent: forked, waited for, run only by you, at the agent's model and effort" || bad Q12 "skills/$n/SKILL.md:$missing"
 done
 grep '^- Mechanical changes' "$PKG/CLAUDE.md" | grep '`blueprint`' | grep '`critic`' | grep 'logic, security, auth or data' | grep -q 'keeps the meaning' && ok "Q13 mechanical changes skip blueprint and critic, unless they touch logic, security, auth or data" || bad Q13 "no mechanical-changes route with its limits"
+s="$PKG/agents/smith.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
+for t in Edit Write Bash; do printf '%s\n' "$fm" | grep '^tools:' | grep -q "$t" || missing="$missing [tools: $t]"; done
+printf '%s\n' "$fm" | grep -A3 -x 'skills:' | grep -qx '  - tdd' || missing="$missing [skills: - tdd]"
+for p in "can't ask the user" 'report Blocked' 'leave the code building' 'files you touched'; do sed '1,/^---$/d' "$s" 2>/dev/null | grep -q "$p" || missing="$missing [$p]"; done
+grep '^- Run `spec`' "$PKG/CLAUDE.md" | grep 'continue that same `smith`' | grep -q 'start a new one with the plan, its Blocked report and my answer' || missing="$missing [CLAUDE.md: continue smith, or start a new one]"
+[ -z "$missing" ] && ok "Q15 smith can edit and run commands, preloads tdd, and reports Blocked instead of asking, leaving work a new run can pick up" || bad Q15 "agents/smith.md:$missing"
 
 echo
 echo "passed $PASS, failed $FAIL"

@@ -10,6 +10,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 |---|---|---|---|---|
 | `scout` | haiku | low | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
 | `critic` | sonnet | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
+| `smith` | sonnet | medium | edits code | Carrying out a plan or review findings test-first; preloads the `tdd` skill |
 
 "Read-only" for agents with Bash is an instruction in the prompt, not enforced by permissions.
 
@@ -19,38 +20,39 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 |---|---|
 | `scope` | Talks a vague idea through with you, one question at a time, until the scope is agreed, then hands off to `spec` |
 | `spec` | Writes agreed scope up as a testable spec, then hands off to `blueprint` |
-| `blueprint` | A step-by-step implementation plan for a non-trivial change, then hands off to `build` |
-| `build` | Carries out a plan or review findings test-first, running builds, tests and linters |
+| `blueprint` | A step-by-step implementation plan for a non-trivial change, written so `smith` can follow it without the conversation, then hands it to `smith` |
 | `inspect` | Systematic debugging: reproduce, find the root cause with evidence, then fix with a failing test first |
 | `tdd` | Test-driven development: red, green, refactor |
 | `critic` | Lets you run the `critic` agent yourself with `/critic`, optionally followed by what to review. Claude doesn't use it; it calls the agent directly |
 | `scout` | Lets you run the `scout` agent yourself with `/scout` followed by a question, optionally saying how thoroughly to look. Claude doesn't use it; it calls the agent directly |
+| `smith` | Lets you run the `smith` agent yourself with `/smith` followed by a plan or review findings, or a file that holds them. Claude doesn't use it; it calls the agent directly |
 | `check` | Run the real checks and read the output before claiming anything is done, fixed or passing |
 | `ship` | Commits, pushes, opens a PR or merges when you ask, up to the stage you name, following the branch, commit, PR and merge rules, which take precedence over Claude Code's defaults where they conflict |
 
 ### `CLAUDE.md`
 
-A "Claude Code subagents" section that tells the main conversation when to use each agent and skill, and what to pass between them. `spec`, `blueprint` and `build` are skills, so they run one after another in the main conversation, which skips a subagent's cold start and re-reading, and lets them ask you questions directly. Subagents load CLAUDE.md too (except the built-in `Explore` and `Plan`), so it also tells them to do their own task and report back instead of following the routing themselves. Because every session and subagent loads it, it stays short: the git rules live in the `ship` skill, which loads only when you ask for git work.
+A "Claude Code subagents" section that tells the main conversation when to use each agent and skill, and what to pass between them. `spec` and `blueprint` are skills, so they run in the main conversation, which skips a subagent's cold start and lets them ask you questions directly. Building is the `smith` subagent instead: its file reads, diffs and test output stay out of the main conversation, and it runs on its own model and effort, which Claude can raise for a risky change. Subagents load CLAUDE.md too (except the built-in `Explore` and `Plan`), so it also tells them to do their own task and report back instead of following the routing themselves. Because every session and subagent loads it, it stays short: the git rules live in the `ship` skill, which loads only when you ask for git work.
 
 ## Workflow
 
 ```
 small, obvious change      → do it directly
 mechanical change          → do it directly, tests first (renames, config values, wording)
-vague request              → scope (with you) → spec → blueprint → build (tdd) → critic
-clear, non-trivial change  → blueprint → build (tdd) → critic
-something broken           → inspect → fix test-first (tdd), or blueprint → build (tdd) → critic
-critic finds issues        → build → critic again (max 1 round)
+vague request              → scope (with you) → spec → blueprint → smith (tdd) → critic
+clear, non-trivial change  → blueprint → smith (tdd) → critic
+something broken           → inspect → fix test-first (tdd), or blueprint → smith (tdd) → critic
+critic finds issues        → smith → critic again (max 1 round)
 before saying "done"       → check
 git, only when you ask     → ship: branch → commit → PR → merge (+ cleanup, issue to Done)
 ```
 
-- `build` and `inspect` write code test-first with `tdd`: a failing test, then the code that makes it pass. Small, obvious changes skip it, along with the rest of the workflow.
+- `smith` and `inspect` write code test-first with `tdd`: a failing test, then the code that makes it pass. Small, obvious changes skip it, along with the rest of the workflow.
 - Mechanical changes skip `blueprint` and `critic` however many files they touch: renames with every reference updated, config values, doc edits and rewording that keeps the meaning, as long as they don't touch logic, security, auth or data. Claude updates the tests that cover them first, if any, makes the change and runs `check`. A review costs a subagent re-reading the files from scratch, which is rarely worth it for a change with no logic in it.
-- `scope`, `spec`, `blueprint` and `build` run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
-- `critic` is still a subagent, so it reviews the change with fresh eyes. It gets the plan, the build report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
+- `scope`, `spec` and `blueprint` run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
+- `smith` gets only the plan, so `blueprint` writes it for someone who hasn't seen the conversation. `smith` can't ask you anything: if it's blocked, it stops and reports what it needs, Claude asks you, then continues the same `smith` with your answer, or starts a new one with the plan, its report and your answer if it can't be continued. To run it yourself, type `/smith` followed by a plan or review findings, or a file that holds them.
+- `critic` is a subagent too, so it reviews the change with fresh eyes. It gets the plan, `smith`'s report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
 - To review a change yourself, type `/critic`, optionally followed by what to review: files, a commit range, a plan or an earlier review's findings. The skill starts the `critic` agent in a fresh context, at its model and effort, and waits for its report. Claude never runs that skill itself: it calls the agent directly, so it can raise the model or effort for a risky change.
-- If `critic` reports any Critical or Should-fix finding, whatever its verdict (so "Approve with changes" counts too), Claude fixes them with `build` and runs `critic` again, which checks each finding was fixed. Nits alone don't start a fix round. After 1 round Claude stops and reports to you.
+- If `critic` reports any Critical or Should-fix finding, whatever its verdict (so "Approve with changes" counts too), Claude fixes them with `smith` and runs `critic` again, which checks each finding was fixed. Nits alone don't start a fix round. After 1 round Claude stops and reports to you.
 - Claude commits, opens PRs and merges only when you ask, and stops at the stage you name, following the `ship` skill. It stays on the branch made for the task, or cuts one from the current branch (`123-short-name`, or `fix/short-name` without an issue), writes Conventional Commits that end in `(#123)` when there's an issue, and opens the PR against that parent branch with Summary, Changes and Testing sections. It merges once CI has passed, the branch is rebased onto its base and no review requests changes or has unresolved threads: a rebase merge for 1 commit, a squash merge for more. Then it deletes the remote and local branch, switches back to the parent and pulls. If there's an issue, it closes it or moves it to Done in whatever tracker it lives in (GitHub, Jira, Linear…), unless the merge already did, and comments with a link to the merged PR.
 
 ## Install
@@ -120,7 +122,7 @@ Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-
 
 ## Tests
 
-`tests/regress.sh` runs `install.sh` through about 100 checks: fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, and that `/critic` and `/scout` start their agents.
+`tests/regress.sh` runs `install.sh` through about 100 checks: fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, and that `/critic`, `/scout` and `/smith` start their agents.
 
 ```bash
 bash tests/regress.sh
@@ -134,6 +136,7 @@ The names avoid clashes with Claude Code's built-ins:
 - `scout`, not `Explore`, because a built-in agent uses that name. A clearly different name also makes the two easier to tell apart. The `scout` skill starts the agent of the same name through `agent: scout` in its frontmatter, so `/scout` runs the agent.
 - `blueprint`, not `plan`, because of the built-in `/plan` command and `Plan` agent.
 - `critic`, not `review`, because `/review` is a built-in alias of `/code-review`, and a skill named `review` would never run from it. The `critic` skill starts the agent of the same name through `agent: critic` in its frontmatter, so `/critic` runs the agent.
+- `smith` has no built-in to avoid; it's a one-word role like `critic` and `scout`. The `smith` skill starts the agent of the same name through `agent: smith` in its frontmatter, so `/smith` runs the agent.
 - `inspect`, not `debug`, and `check`, not `verify`, because `/debug` and `/verify` are built-in.
 
 Because `scout` doesn't replace the built-in `Explore`, Claude can still use `Explore` on its own, which may run on a different model and returns its own report format. That's an accepted trade-off; naming the agent `Explore` instead would make your version replace the built-in everywhere.
