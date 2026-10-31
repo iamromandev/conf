@@ -18,7 +18,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 
 | Skill | What it does |
 |---|---|
-| `foreman` | Runs every non-trivial task through the whole chain: prints the route, reads the issue, keeps the spec, plan and progress in `.claude/tasks/<slug>/`, stops once for your OK, builds and reviews phase by phase, and ends with a report. Run it yourself as `/foreman <task>`, or `/foreman <slug>` to resume |
+| `foreman` | Runs every non-trivial task through the whole chain: prints the route, reads the issue, keeps the spec, plan and progress in `docs/conf/tasks/<slug>/`, stops once for your OK, builds and reviews phase by phase, and ends with a report. Run it yourself as `/foreman <task>`, or `/foreman <slug>` to resume |
 | `scope` | Talks a vague idea through with you, one question at a time, until the scope is agreed, then hands off to `spec` |
 | `spec` | Writes agreed scope up as a testable spec (saved in the task folder under `foreman`), then hands off to `blueprint` |
 | `blueprint` | A step-by-step implementation plan for a non-trivial change, written so `smith` can follow it without the conversation, with acceptance criteria and, when it's big, phases. Under `foreman` it waits for your OK; on its own it hands the plan to `smith` |
@@ -50,7 +50,7 @@ git, only when you ask     → ship: branch → commit → PR → merge (+ clean
 - Mechanical changes skip `blueprint` and `critic` however many files they touch: renames with every reference updated, config values, doc edits and rewording that keeps the meaning, as long as they don't touch logic, security, auth or data. Claude updates the tests that cover them first, if any, makes the change and runs `check`. A review costs a subagent re-reading the files from scratch, which is rarely worth it for a change with no logic in it.
 - `foreman` starts with a route line you can correct, such as `Route: issue #42 → spec → blueprint → your OK → smith → critic → check`. It reads the issue if you name one (GitHub, Jira…). A vague request goes to `scope` then `spec`, new or changed behavior to `spec`, and a refactor or a fix with a known cause straight to `blueprint`, which writes its own acceptance criteria.
 - `scope`, `spec` and `blueprint` run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
-- Each task's files live in `.claude/tasks/<slug>/`, with a slug like `42-csv-export`: `spec.md` (when there's a spec), `plan.md` and `status.md`. They're kept out of git through `.git/info/exclude`, so no tracked file changes. `/foreman <slug>` resumes a task in a new session, and `/foreman` alone lists them.
+- Each task's files live in `docs/conf/tasks/<slug>/`, with a slug like `42-csv-export`: `spec.md` (when there's a spec), `plan.md` and `status.md`. They're kept out of git through `.git/info/exclude`, so no tracked file changes. `/foreman <slug>` resumes a task in a new session, and `/foreman` alone lists them.
 - There is one stop, after the plan, for your OK. The OK also cuts the task branch, named the way `ship` names them; commits, pushes and PRs still wait until you ask. Saying "just do it" up front skips the stop.
 - A big plan is split into phases, each with its own `smith` run and `critic` review.
 - `smith` gets the paths to `plan.md` and `spec.md` and the phase to build, so `blueprint` writes the plan for someone who hasn't seen the conversation. `smith` can't ask you anything: if it's blocked, it stops and reports what it needs, Claude asks you, then continues the same `smith` with your answer, or starts a new one with the plan, its report and your answer if it can't be continued. If the plan can't be followed without a design change, it reports "The plan doesn't hold" instead of redesigning. To run it yourself, type `/smith` followed by a plan or review findings, or a file that holds them. A direct `/smith` or `/critic` returns its report to you; the Blocked handling and the fix round apply when `foreman` runs them.
@@ -123,7 +123,7 @@ Copy `agents/*.md` to `~/.claude/agents/`, each folder in `skills/` to `~/.claud
 
 ## Undo
 
-Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-- conf: end of section -->` comment), and the installed agents and skills you no longer want. The installer keeps no backups of what it replaced. Task folders live in each project's `.claude/tasks/`; delete them, and the `**/.claude/tasks/` line in that repo's `.git/info/exclude`, if you no longer want them.
+Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-- conf: end of section -->` comment), and the installed agents and skills you no longer want. The installer keeps no backups of what it replaced. Task folders live in each project's `docs/conf/tasks/`; delete them, and the `**/docs/conf/tasks/` line in that repo's `.git/info/exclude`, if you no longer want them.
 
 ## Tests
 

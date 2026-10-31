@@ -1,6 +1,6 @@
 ---
 name: foreman
-description: Run a non-trivial task (feature, refactor, fix with a known cause, vague or not) through the whole chain, from route and issue through spec, plan, the user's OK, build, review and check, keeping its spec, plan and progress in .claude/tasks/<slug>/. Use whenever a task isn't small or mechanical, and to resume one with /foreman <slug>.
+description: Run a non-trivial task (feature, refactor, fix with a known cause, vague or not) through the whole chain, from route and issue through spec, plan, the user's OK, build, review and check, keeping its spec, plan and progress in docs/conf/tasks/<slug>/. Use whenever a task isn't small or mechanical, and to resume one with /foreman <slug>.
 argument-hint: task or issue, or a task's slug to resume
 ---
 
@@ -9,7 +9,7 @@ argument-hint: task or issue, or a task's slug to resume
 Run the task through the whole chain in this conversation, so every non-trivial task goes the same way: a route the user can see, files that outlive the conversation, and one OK from the user before any code is written.
 
 ## Start
-1. **Resume or new.** If the argument names a folder in `.claude/tasks/`, read its `status.md` and carry on from the step marked next; for a step marked in progress, check the working tree first and run that step again. Before running `smith`, make sure the branch recorded in `status.md` is checked out; switch to it, or ask the user if that isn't possible (for example uncommitted changes in the way). A step that leaves nothing on disk (such as `scope` cut off mid-conversation) simply runs again. With no argument and no task described in the conversation, list the tasks in `.claude/tasks/` with their next step and ask which to continue. Otherwise it's a new task.
+1. **Resume or new.** If the argument names a folder in `docs/conf/tasks/`, read its `status.md` and carry on from the step marked next; for a step marked in progress, check the working tree first and run that step again. Before running `smith`, make sure the branch recorded in `status.md` is checked out; switch to it, or ask the user if that isn't possible (for example uncommitted changes in the way). A step that leaves nothing on disk (such as `scope` cut off mid-conversation) simply runs again. With no argument and no task described in the conversation, list the tasks in `docs/conf/tasks/` with their next step and ask which to continue. Otherwise it's a new task.
 2. **Issue.** If the task names an issue (a GitHub number or URL, a Jira key or URL, another tracker's URL), read it first with that tracker's tool (`gh issue view`, the Atlassian connector…) and use its title, description and acceptance criteria as input to scope and spec. If you can't reach it, say so and go on from the user's words.
 3. **Triage.** If the task is small, obvious or mechanical (see CLAUDE.md), say so in one line instead of a Route line and do it that way, with no task folder. Otherwise pick the route:
    - vague (leaves open what to build, who it's for, or what "done" means) → `scope`, then `spec`
@@ -18,7 +18,7 @@ Run the task through the whole chain in this conversation, so every non-trivial 
 
    Every route then goes `blueprint` → the user's OK → `smith` → `critic`, phase by phase → `check` → report.
 4. **Route.** For a new task, once the issue is read and before scope, spec or the plan, print one line such as `Route: issue #42 → spec → blueprint → your OK → smith → critic → check`. If the route changes later, print the new one.
-5. **Task folder.** The slug is `<issue>-<short-kebab-name>` (`42-csv-export`, `ABC-12-sso`), or `<short-kebab-name>` without an issue. Create `.claude/tasks/<slug>/` in the project's root. If that folder already exists and its `status.md` names a different issue or task, it belongs to another task: append `-2` (or the next free number) to the slug. In a git repo, unless `git check-ignore -q .claude/tasks/<slug>/status.md` already succeeds, first add the line `**/.claude/tasks/` to the repo's `.git/info/exclude` (in a worktree, the `info/exclude` under `git rev-parse --path-format=absolute --git-common-dir`), creating it if needed. Never edit `.gitignore` or any other tracked file for this. If the exclude write fails, tell the user the folder will show up in `git status`, and keep going. Outside git, skip it and say so. Then write `status.md`. If writing under `.claude/` is refused, say so and keep the spec, plan and status in the conversation.
+5. **Task folder.** The slug is `<issue>-<short-kebab-name>` (`42-csv-export`, `ABC-12-sso`), or `<short-kebab-name>` without an issue. Create `docs/conf/tasks/<slug>/` in the project's root. If that folder already exists and its `status.md` names a different issue or task, it belongs to another task: append `-2` (or the next free number) to the slug. In a git repo, unless `git check-ignore -q docs/conf/tasks/<slug>/status.md` already succeeds, first add the line `**/docs/conf/tasks/` to the repo's `.git/info/exclude` (in a worktree, the `info/exclude` under `git rev-parse --path-format=absolute --git-common-dir`), creating it if needed. Never edit `.gitignore` or any other tracked file for this. If the exclude write fails, tell the user the folder will show up in `git status`, and keep going. Outside git, skip it and say so. Then write `status.md`. If writing the task folder is refused, say so and keep the spec, plan and status in the conversation.
 
 ## status.md
 Update it after every step, so a new session can pick the task up:
@@ -71,7 +71,7 @@ Run the `check` skill against the plan's acceptance criteria, update `status.md`
 - **Review**: each phase's `critic` verdict
 - **Checks**: what ran, and the result
 - **Left**: open findings, unmet criteria, follow-ups
-- **Task folder**: `.claude/tasks/<slug>/`
+- **Task folder**: `docs/conf/tasks/<slug>/`
 
 Commits, pushes and PRs only when the user asks, with the `ship` skill.
 

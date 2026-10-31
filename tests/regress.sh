@@ -263,8 +263,8 @@ s="$PKG/skills/foreman/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); mi
 printf '%s\n' "$fm" | grep -qx 'name: foreman' || missing="$missing [name: foreman]"
 printf '%s\n' "$fm" | grep -qE '^(disable-model-invocation|context|agent):' && missing="$missing [frontmatter sets disable-model-invocation, context or agent]"
 body=$(sed '1,/^---$/d' "$s" 2>/dev/null)
-for t in '.claude/tasks/' '.git/info/exclude' '**/.claude/tasks/' 'status.md' 'spec.md' 'plan.md' 'Route:' '[plan]' "the user's OK" 'continue that same `smith`'; do printf '%s\n' "$body" | grep -qF -- "$t" || missing="$missing [$t]"; done
-[ -z "$missing" ] && ok "Q16 foreman is run by Claude or you, inline, and keeps the task in .claude/tasks/" || bad Q16 "skills/foreman/SKILL.md:$missing"
+for t in 'docs/conf/tasks/' '.git/info/exclude' '**/docs/conf/tasks/' 'status.md' 'spec.md' 'plan.md' 'Route:' '[plan]' "the user's OK" 'continue that same `smith`'; do printf '%s\n' "$body" | grep -qF -- "$t" || missing="$missing [$t]"; done
+[ -z "$missing" ] && ok "Q16 foreman is run by Claude or you, inline, and keeps the task in docs/conf/tasks/" || bad Q16 "skills/foreman/SKILL.md:$missing"
 c="$PKG/CLAUDE.md"; missing=""
 grep '^- Non-trivial change' "$c" | grep -qF '`foreman`' || missing="$missing [Non-trivial line names foreman]"
 grep -q '^- Vague' "$c" && missing="$missing [still has a Vague line]"
@@ -281,10 +281,10 @@ has skills/blueprint/SKILL.md '**Acceptance criteria**'; has skills/blueprint/SK
 has skills/spec/SKILL.md 'spec.md'; has skills/spec/SKILL.md '`foreman`'; has skills/scope/SKILL.md '`foreman`'; has skills/inspect/SKILL.md '`foreman`'
 has agents/smith.md "The plan doesn't hold"; has agents/smith.md 'acceptance criteria'
 has agents/critic.md '**Acceptance criteria**'; has agents/critic.md '[plan]'
-has skills/smith/SKILL.md '.claude/tasks/<slug>/plan.md'; grep -qF 'docs/plan.md' "$PKG/skills/smith/SKILL.md" && missing="$missing [skills/smith still has docs/plan.md]"
+has skills/smith/SKILL.md 'docs/conf/tasks/<slug>/plan.md'; grep -qF 'docs/plan.md' "$PKG/skills/smith/SKILL.md" && missing="$missing [skills/smith still has docs/plan.md]"
 has skills/ship/SKILL.md 'status.md'
 grep -q '^| `foreman` |' "$PKG/README.md" || missing="$missing [README foreman row]"
-has README.md '.claude/tasks/<slug>/'; has README.md '/foreman <slug>'
+has README.md 'docs/conf/tasks/<slug>/'; has README.md '/foreman <slug>'
 [ -z "$missing" ] && ok "Q18 acceptance criteria and plan-level findings are named in blueprint, smith, critic, spec, ship, inspect and the README" || bad Q18 "missing:$missing"
 
 # foreman's order, resume, fix round and status.md; how ship finds the task's status.md; what a direct /smith or /critic returns
@@ -298,8 +298,9 @@ has skills/foreman/SKILL.md 'on top of the code already in the tree'; has skills
 has skills/foreman/SKILL.md 'covers only the first OK'; has skills/foreman/SKILL.md 'always waits for the user'
 has skills/foreman/SKILL.md 'the files `smith`'; has skills/foreman/SKILL.md 'next free number'; has skills/foreman/SKILL.md 'names a different issue or task'
 has skills/foreman/SKILL.md 'the exclude write fails'
+grep -qF ".claude/tasks" "$f" && missing="$missing [foreman still names .claude/tasks]"
 has skills/foreman/SKILL.md "belongs to that task"; has skills/foreman/SKILL.md 'no task described in the conversation'
-has skills/ship/SKILL.md '.claude/tasks/*/status.md'; has skills/ship/SKILL.md '`.claude/tasks/` is never committed'; has skills/ship/SKILL.md '`- Parent:`'
+has skills/ship/SKILL.md 'docs/conf/tasks/*/status.md'; has skills/ship/SKILL.md '`docs/conf/tasks/` is never committed'; has skills/ship/SKILL.md '`- Parent:`'
 has README.md 'returns its report to you'
 [ -z "$missing" ] && ok "Q19 foreman orders its start, resumes safely and completes the fix round; ship finds status.md; README says what a direct /smith returns" || bad Q19 "missing:$missing"
 
