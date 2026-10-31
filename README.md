@@ -9,7 +9,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 | Agent | Model | Effort | Tools | Use it for |
 |---|---|---|---|---|
 | `explorer` | haiku | medium | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
-| `reviewer` | opus | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
+| `critic` | opus | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
 
 "Read-only" for agents with Bash is an instruction in the prompt, not enforced by permissions.
 
@@ -23,6 +23,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 | `build` | Carries out a plan or review findings test-first, running builds, tests and linters |
 | `inspect` | Systematic debugging: reproduce, find the root cause with evidence, then fix with a failing test first |
 | `tdd` | Test-driven development: red, green, refactor |
+| `critic` | Lets you run the `critic` agent yourself with `/critic`, optionally followed by what to review. Claude doesn't use it; it calls the agent directly |
 | `check` | Run the real checks and read the output before claiming anything is done, fixed or passing |
 
 ### `CLAUDE.md`
@@ -33,18 +34,19 @@ A "Claude Code subagents" section that tells the main conversation when to use e
 
 ```
 small, obvious change      → do it directly
-vague request              → scope (with you) → spec → blueprint → build (tdd) → reviewer
-clear, non-trivial change  → blueprint → build (tdd) → reviewer
-something broken           → inspect → fix test-first (tdd), or blueprint → build (tdd) → reviewer
-reviewer finds issues      → build → reviewer again (max 1 round)
+vague request              → scope (with you) → spec → blueprint → build (tdd) → critic
+clear, non-trivial change  → blueprint → build (tdd) → critic
+something broken           → inspect → fix test-first (tdd), or blueprint → build (tdd) → critic
+critic finds issues        → build → critic again (max 1 round)
 before saying "done"       → check
 git, only when you ask     → branch → commit → PR → merge (+ cleanup, issue to Done)
 ```
 
 - `build` and `inspect` write code test-first with `tdd`: a failing test, then the code that makes it pass. Small, obvious changes skip it, along with the rest of the workflow.
 - `scope`, `spec`, `blueprint` and `build` run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
-- `reviewer` is still a subagent, so it reviews the change with fresh eyes. It gets the plan, the build report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
-- If `reviewer` reports any Critical or Should-fix finding, whatever its verdict (so "Approve with changes" counts too), Claude fixes them with `build` and runs `reviewer` again, which checks each finding was fixed. Nits alone don't start a fix round. After 1 round Claude stops and reports to you.
+- `critic` is still a subagent, so it reviews the change with fresh eyes. It gets the plan, the build report (especially Deviations) and the changed files or commit range. In a git repo it also checks `git status`, `git diff` and `git diff --staged` itself, and mentions any uncommitted work of yours that isn't part of the change without reviewing it.
+- To review a change yourself, type `/critic`, optionally followed by what to review: files, a commit range, a plan or an earlier review's findings. The skill starts the `critic` agent in a fresh context, at its model and effort, and waits for its report. Claude never runs that skill itself: it calls the agent directly, so it can raise the model or effort for a risky change.
+- If `critic` reports any Critical or Should-fix finding, whatever its verdict (so "Approve with changes" counts too), Claude fixes them with `build` and runs `critic` again, which checks each finding was fixed. Nits alone don't start a fix round. After 1 round Claude stops and reports to you.
 - Claude commits, opens PRs and merges only when you ask, and stops at the stage you name. It stays on the branch made for the task, or cuts one from the current branch (`123-short-name`, or `fix/short-name` without an issue), writes Conventional Commits that end in `(#123)` when there's an issue, and opens the PR against that parent branch with Summary, Changes and Testing sections. It merges once CI has passed, the branch is rebased onto its base and no review requests changes or has unresolved threads: a rebase merge for 1 commit, a squash merge for more. Then it deletes the remote and local branch, switches back to the parent and pulls. If there's an issue, it closes it or moves it to Done in whatever tracker it lives in (GitHub, Jira, Linear…), unless the merge already did, and comments with a link to the merged PR.
 
 ## Install
@@ -114,7 +116,7 @@ Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-
 
 ## Tests
 
-`tests/regress.sh` runs `install.sh` through about 100 checks: fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other.
+`tests/regress.sh` runs `install.sh` through about 100 checks: fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, and that `/critic` starts the `critic` agent.
 
 ```bash
 bash tests/regress.sh
@@ -127,7 +129,7 @@ Every run works in a new temp folder with its own `HOME`, so your `~/.claude` is
 The names avoid clashes with Claude Code's built-ins:
 - `explorer`, not `Explore`, because a built-in agent uses that name.
 - `blueprint`, not `plan`, because of the built-in `/plan` command and `Plan` agent.
-- `reviewer`, not `review`, because of the built-in `/review` command.
+- `critic`, not `review`, because `/review` is a built-in alias of `/code-review`, and a skill named `review` would never run from it. The `critic` skill starts the agent of the same name through `agent: critic` in its frontmatter, so `/critic` runs the agent.
 - `inspect`, not `debug`, and `check`, not `verify`, because `/debug` and `/verify` are built-in.
 
-Because `explorer` doesn't replace the built-in `Explore`, Claude can still use `Explore` on its own, which may run on a different model and returns its own report format. That's an accepted trade-off for consistent `-er` names; naming the agent `Explore` instead would make your version replace the built-in everywhere.
+Because `explorer` doesn't replace the built-in `Explore`, Claude can still use `Explore` on its own, which may run on a different model and returns its own report format. That's an accepted trade-off; naming the agent `Explore` instead would make your version replace the built-in everywhere.

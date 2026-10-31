@@ -23,7 +23,7 @@ No fix without a root cause you can state and back with evidence.
 - No shotgun changes: don't try several fixes at once to see what sticks.
 - Hand broad digging to `explorer` (long logs, searching many files for where a value is set or a call comes from); keep the hypotheses, experiments and fix here.
 - Remove temporary logging and debug code before finishing.
-- If the fix is non-trivial (several files, design change), use the `blueprint` skill, then `build`, then `reviewer`, as CLAUDE.md describes.
+- If the fix is non-trivial (several files, design change), use the `blueprint` skill, then `build`, then `critic`, as CLAUDE.md describes.
 
 ## Report
 - **Root cause**: one or two sentences

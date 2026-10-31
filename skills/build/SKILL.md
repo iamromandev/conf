@@ -12,10 +12,10 @@ Turn the plan into working code, in this conversation.
 2. Read the surrounding code before editing; match its style, naming, error handling and patterns.
 3. Work in small increments. After each meaningful step, run the relevant build, tests or linter.
 4. When something fails, read the actual error, fix the root cause, and re-run. Never weaken or delete tests to make them pass.
-5. Write the report, then hand the change to `reviewer` if CLAUDE.md asks for a review.
+5. Write the report, then hand the change to `critic` if CLAUDE.md asks for a review.
 
 ## Review findings
-When the input is a `reviewer` report instead of a plan:
+When the input is a `critic` report instead of a plan:
 1. Fix the Critical findings first, then Should fix. Leave Nits unless asked.
 2. Treat each finding's suggested fix as a starting point: confirm the problem in the code, then make the smallest fix. If a finding is wrong or out of scope, skip it and say why instead of forcing a change.
 3. For a bug, write a failing test that shows it before fixing it (the `tdd` skill), unless it can't be tested.

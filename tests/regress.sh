@@ -44,20 +44,20 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 2 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 7 ] && ok "B1 fresh install copies 2 agents, 7 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 2 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 8 ] && ok "B1 fresh install copies 2 agents, 8 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && ok "B1 rerun reports 10 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 11 ] && ok "B1 rerun reports 11 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
-mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/reviewer.md"
+mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
-printf '%s\n' "$out" | grep -q '^would replace  *agents/reviewer.md$' && ok "B2 --dry-run says it would replace a changed agent" || bad B2 "no 'would replace' line: $(printf '%s' "$out" | grep -m1 reviewer)"
+printf '%s\n' "$out" | grep -q '^would replace  *agents/critic.md$' && ok "B2 --dry-run says it would replace a changed agent" || bad B2 "no 'would replace' line: $(printf '%s' "$out" | grep -m1 critic)"
 H=$(newhome b6); out=$(cd "$H" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "home folder" && ok "B6 --project refused in HOME (exit $rc)" || bad B6 "not refused in HOME (exit $rc)"
 out=$(cd "$PKG" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "that's the conf package itself" && ok "B6 --project refused in package (exit $rc)" || bad B6 "not refused in package (exit $rc)"
 H=$(newhome b7); put "$H" 'abc'; inst "$H" >/dev/null
 same "B7 append after a file with no final newline" "$H/.claude/CLAUDE.md" "$(printf 'abc\n\n%s' "$SEC")"; idem B7 "$H"
-H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/check"; printf 'my edit\n' > "$H/.claude/agents/reviewer.md"; printf 'my skill edit\n' > "$H/.claude/skills/check/SKILL.md"; printf 'mine\n' > "$H/.claude/skills/check/extra.md"
-chmod a-w "$H/.claude/agents/reviewer.md"; out=$(inst "$H")
-cmp -s "$PKG/agents/reviewer.md" "$H/.claude/agents/reviewer.md" && printf '%s' "$out" | grep -q '^replaced       agents/reviewer.md$' && ok "B8 a changed agent is replaced in place, even if it's read-only" || bad B8 "not replaced: $(printf '%s' "$out" | grep -m1 reviewer)"
+H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/check"; printf 'my edit\n' > "$H/.claude/agents/critic.md"; printf 'my skill edit\n' > "$H/.claude/skills/check/SKILL.md"; printf 'mine\n' > "$H/.claude/skills/check/extra.md"
+chmod a-w "$H/.claude/agents/critic.md"; out=$(inst "$H")
+cmp -s "$PKG/agents/critic.md" "$H/.claude/agents/critic.md" && printf '%s' "$out" | grep -q '^replaced       agents/critic.md$' && ok "B8 a changed agent is replaced in place, even if it's read-only" || bad B8 "not replaced: $(printf '%s' "$out" | grep -m1 critic)"
 diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && printf '%s' "$out" | grep -q '^replaced       skills/check$' && ok "B8 a changed skill folder is replaced whole, extra files included" || bad B8 "skill not replaced: $(printf '%s' "$out" | grep -m1 skills/check)"
 if ls -d "$H"/.claude/conf-backup-* >/dev/null 2>&1 || printf '%s' "$out" | grep -qi 'backup'; then bad B8 "a backup was made: $(ls "$H/.claude")"; else ok "B8 nothing is backed up"; fi
 if [ "$(id -u)" != 0 ]; then
@@ -68,8 +68,8 @@ else
 fi
 H=$(newhome b11); mkdir -p "$T/b11-mine" "$H/.claude/skills"; printf 'keep\n' > "$T/b11-mine/KEEP"; ln -s "$T/b11-mine" "$H/.claude/skills/check"; inst "$H" >/dev/null
 [ ! -L "$H/.claude/skills/check" ] && diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && [ "$(ls "$T/b11-mine")" = KEEP ] && ok "B11 a symlinked skill folder is replaced by a copy, the folder it pointed to untouched" || bad B11 "link=$([ -L "$H/.claude/skills/check" ] && echo yes || echo no) target=$(ls "$T/b11-mine" | tr '\n' ' ')"
-H=$(newhome b12); mkdir -p "$H/.claude/agents"; printf 'mine\n' > "$T/b12-mine.md"; ln -s "$T/b12-mine.md" "$H/.claude/agents/reviewer.md"; inst "$H" >/dev/null
-[ ! -L "$H/.claude/agents/reviewer.md" ] && cmp -s "$PKG/agents/reviewer.md" "$H/.claude/agents/reviewer.md" && [ "$(cat "$T/b12-mine.md")" = mine ] && ok "B12 a symlinked agent file is replaced by a copy, the file it pointed to untouched" || bad B12 "link=$([ -L "$H/.claude/agents/reviewer.md" ] && echo yes || echo no) target=$(cat "$T/b12-mine.md" | head -1)"
+H=$(newhome b12); mkdir -p "$H/.claude/agents"; printf 'mine\n' > "$T/b12-mine.md"; ln -s "$T/b12-mine.md" "$H/.claude/agents/critic.md"; inst "$H" >/dev/null
+[ ! -L "$H/.claude/agents/critic.md" ] && cmp -s "$PKG/agents/critic.md" "$H/.claude/agents/critic.md" && [ "$(cat "$T/b12-mine.md")" = mine ] && ok "B12 a symlinked agent file is replaced by a copy, the file it pointed to untouched" || bad B12 "link=$([ -L "$H/.claude/agents/critic.md" ] && echo yes || echo no) target=$(cat "$T/b12-mine.md" | head -1)"
 H=$(newhome b9); put "$H" '# Mine\n\nstuff\n'; inst "$H" >/dev/null
 same "B9 section appended to a file without one" "$H/.claude/CLAUDE.md" "$(printf '# Mine\n\nstuff\n\n%s' "$SEC")"; idem B9 "$H"
 
@@ -193,8 +193,8 @@ echo "== Refusals stop the whole install"
 if [ "$(id -u)" != 0 ]; then
   H=$(newhome x1); put "$H" '# Mine\n'; chmod a-w "$H/.claude/CLAUDE.md"
   refused "X1 a read-only CLAUDE.md that needs a change: refused before anything is installed" "$H" "can't write"; chmod u+w "$H/.claude/CLAUDE.md"
-  H=$(newhome x3); rmdir "$H/.claude"; inst "$H" >/dev/null; rm "$H/.claude/agents/reviewer.md"; chmod a-w "$H/.claude/CLAUDE.md"; out=$(inst "$H"); rc=$?; chmod u+w "$H/.claude/CLAUDE.md"
-  [ $rc = 0 ] && [ -f "$H/.claude/agents/reviewer.md" ] && printf '%s' "$out" | grep -q 'unchanged .*CLAUDE.md' && ok "X3 a read-only CLAUDE.md that's already current: install goes ahead" || bad X3 "rc=$rc $(printf '%s' "$out" | grep -m1 error)"
+  H=$(newhome x3); rmdir "$H/.claude"; inst "$H" >/dev/null; rm "$H/.claude/agents/critic.md"; chmod a-w "$H/.claude/CLAUDE.md"; out=$(inst "$H"); rc=$?; chmod u+w "$H/.claude/CLAUDE.md"
+  [ $rc = 0 ] && [ -f "$H/.claude/agents/critic.md" ] && printf '%s' "$out" | grep -q 'unchanged .*CLAUDE.md' && ok "X3 a read-only CLAUDE.md that's already current: install goes ahead" || bad X3 "rc=$rc $(printf '%s' "$out" | grep -m1 error)"
 else
   echo "skip X1, X3 read-only CLAUDE.md (running as root)"
 fi
@@ -208,7 +208,7 @@ H=$(newhome t1); rmdir "$H/.claude"; out=$(env HOME="$H" TMPDIR="$T/no/such/dir"
 
 echo "== Agent, skill and README checks"
 sed -n 3p "$PKG/CLAUDE.md" | grep -q 'for the main conversation' && ok "Q2 CLAUDE.md starts with the subagent rule" || bad Q2 "rule missing"
-grep -q 'git status --short' "$PKG/agents/reviewer.md" && ok "Q3 reviewer checks untracked files" || bad Q3 "no git status"
+grep -q 'git status --short' "$PKG/agents/critic.md" && ok "Q3 critic checks untracked files" || bad Q3 "no git status"
 ! grep -q 'wrap the whole description in double quotes' "$PKG/README.md" && grep -q "Don't wrap it in double quotes" "$PKG/README.md" && ok "Q4 README no longer suggests double quotes" || bad Q4 "old advice"
 if command -v ruby >/dev/null; then
   broken=""
@@ -226,13 +226,19 @@ missing=""; for n in $(grep -o '`[a-z-]*`' "$PKG/CLAUDE.md" | tr -d '`' | sort -
 missing=""; for s in '^- Git work only when I ask' '^- Branch:' '<short-kebab-name>' '^- Commits:' '^- PR:' 'Closes #<issue>' '^- Merge only when' 'squash if more' '^- After merging' 'delete the remote and local branch' 'link to the merged PR'; do grep -q -- "$s" "$PKG/CLAUDE.md" || missing="$missing [$s]"; done
 [ -z "$missing" ] && ok "Q8 CLAUDE.md has every git rule: trigger, branch, commit, PR, merge, cleanup, issue update" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
-a="$PKG/agents"; grep -qx 'model: opus' "$a/reviewer.md" && grep -qx 'effort: high' "$a/reviewer.md" && grep -qx 'model: haiku' "$a/explorer.md" && grep -qx 'effort: medium' "$a/explorer.md" \
-  && grep -q '^| `reviewer` | opus | high |' "$PKG/README.md" && grep -q '^| `explorer` | haiku | medium |' "$PKG/README.md" \
-  && ok "Q10 reviewer is opus/high and explorer haiku/medium, in the agents and README" || bad Q10 "model or effort differs"
+a="$PKG/agents"; grep -qx 'model: opus' "$a/critic.md" && grep -qx 'effort: high' "$a/critic.md" && grep -qx 'model: haiku' "$a/explorer.md" && grep -qx 'effort: medium' "$a/explorer.md" \
+  && grep -q '^| `critic` | opus | high |' "$PKG/README.md" && grep -q '^| `explorer` | haiku | medium |' "$PKG/README.md" \
+  && ok "Q10 critic is opus/high and explorer haiku/medium, in the agents and README" || bad Q10 "model or effort differs"
 # (bracketed so this line doesn't match itself)
-legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf'
-hits=$(cd "$PKG" && grep -nE "$legacy" README.md install.sh tests/regress.sh)
-[ -z "$hits" ] && ok "Q11 no upgrade paths for earlier versions are left" || bad Q11 "$(printf '%s' "$hits" | head -3 | cut -c1-80)"
+legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf|[r]eviewer'
+hits=$(cd "$PKG" && grep -nE "$legacy" README.md install.sh tests/regress.sh CLAUDE.md skills/*/SKILL.md)
+[ -z "$hits" ] && ok "Q11 no earlier names or upgrade paths are left" || bad Q11 "$(printf '%s' "$hits" | head -3 | cut -c1-80)"
+s="$PKG/skills/critic/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
+[ "$(sed -n 1p "$s" 2>/dev/null)" = '---' ] && [ "$(printf '%s\n' "$fm" | tail -n 1)" = '---' ] || missing="$missing [frontmatter between --- lines]"
+for l in 'context: fork' 'agent: critic' 'background: false' 'disable-model-invocation: true'; do printf '%s\n' "$fm" | grep -qx "$l" || missing="$missing [$l]"; done
+printf '%s\n' "$fm" | grep -qE '^(model|effort):' && missing="$missing [sets model or effort]"
+sed '1,/^---$/d' "$s" 2>/dev/null | grep -q '\$ARGUMENTS' || missing="$missing [\$ARGUMENTS in the body]"
+[ -z "$missing" ] && ok "Q12 /critic starts the critic agent: forked, waited for, run only by you, at the agent's model and effort" || bad Q12 "skills/critic/SKILL.md:$missing"
 
 echo
 echo "passed $PASS, failed $FAIL"
