@@ -2,7 +2,7 @@
 
 - These rules are for the main conversation. A subagent does its own task, without dispatching other agents or using `scope` unless that task says to, and reports back instead of asking me.
 - Small, obvious changes (a few lines, one file): do them directly, no skills or subagents.
-- Broad searches across many files, or open-ended "where/how is X" → `explorer`. Read a known file directly.
+- Broad searches across many files, or open-ended "where/how is X" → `scout`. Read a known file directly.
 - Vague or loose feature request → `scope` skill with me first, then `spec` with the agreed summary, then `blueprint` with the spec.
 - Non-trivial change → `blueprint` skill, then `build` to implement it test-first with `tdd`, then `critic`.
 - Something broken and the cause isn't known → `inspect` skill, which fixes it test-first with `tdd`.

@@ -8,8 +8,8 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 
 | Agent | Model | Effort | Tools | Use it for |
 |---|---|---|---|---|
-| `explorer` | haiku | medium | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
-| `critic` | opus | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
+| `scout` | haiku | low | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
+| `critic` | sonnet | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
 
 "Read-only" for agents with Bash is an instruction in the prompt, not enforced by permissions.
 
@@ -24,6 +24,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 | `inspect` | Systematic debugging: reproduce, find the root cause with evidence, then fix with a failing test first |
 | `tdd` | Test-driven development: red, green, refactor |
 | `critic` | Lets you run the `critic` agent yourself with `/critic`, optionally followed by what to review. Claude doesn't use it; it calls the agent directly |
+| `scout` | Lets you run the `scout` agent yourself with `/scout` followed by a question, optionally saying how thoroughly to look. Claude doesn't use it; it calls the agent directly |
 | `check` | Run the real checks and read the output before claiming anything is done, fixed or passing |
 
 ### `CLAUDE.md`
@@ -102,7 +103,7 @@ Running it again is safe: unchanged files are reported as unchanged.
 
 ### Editing the files
 
-If you change an agent's or skill's `description`, keep it plain, unquoted text that starts with a letter. Avoid ` #`: YAML reads it as the start of a comment, so the rest of the description is silently dropped. Avoid a colon followed by a space (e.g. "step by step: write…") or at the end, too, which isn't valid YAML. If you need either, wrap the description in single quotes and double any apostrophe inside (`it''s`). Don't wrap it in double quotes: `explorer`'s and `scope`'s descriptions contain double quotes, so the frontmatter would stop parsing. Claude Code then skips the agent, or loads the skill without a description.
+If you change an agent's or skill's `description`, keep it plain, unquoted text that starts with a letter. Avoid ` #`: YAML reads it as the start of a comment, so the rest of the description is silently dropped. Avoid a colon followed by a space (e.g. "step by step: write…") or at the end, too, which isn't valid YAML. If you need either, wrap the description in single quotes and double any apostrophe inside (`it''s`). Don't wrap it in double quotes: `scout`'s and `scope`'s descriptions contain double quotes, so the frontmatter would stop parsing. Claude Code then skips the agent, or loads the skill without a description.
 
 `CLAUDE.md` must start with the `## Claude Code subagents` heading, end with the end-of-section comment, and have no other headings or end-of-section comments; the installer stops if it doesn't. Reword, add or remove lines freely: installs get the new wording on their next run, since the whole section is replaced. Leave the heading and the end-of-section comment as they are (`HEADING` and `END_MARK` in `install.sh`): the installer finds installed sections by them.
 
@@ -116,7 +117,7 @@ Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-
 
 ## Tests
 
-`tests/regress.sh` runs `install.sh` through about 100 checks: fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, and that `/critic` starts the `critic` agent.
+`tests/regress.sh` runs `install.sh` through about 100 checks: fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, and that `/critic` and `/scout` start their agents.
 
 ```bash
 bash tests/regress.sh
@@ -127,9 +128,9 @@ Every run works in a new temp folder with its own `HOME`, so your `~/.claude` is
 ## Naming
 
 The names avoid clashes with Claude Code's built-ins:
-- `explorer`, not `Explore`, because a built-in agent uses that name.
+- `scout`, not `Explore`, because a built-in agent uses that name. A clearly different name also makes the two easier to tell apart. The `scout` skill starts the agent of the same name through `agent: scout` in its frontmatter, so `/scout` runs the agent.
 - `blueprint`, not `plan`, because of the built-in `/plan` command and `Plan` agent.
 - `critic`, not `review`, because `/review` is a built-in alias of `/code-review`, and a skill named `review` would never run from it. The `critic` skill starts the agent of the same name through `agent: critic` in its frontmatter, so `/critic` runs the agent.
 - `inspect`, not `debug`, and `check`, not `verify`, because `/debug` and `/verify` are built-in.
 
-Because `explorer` doesn't replace the built-in `Explore`, Claude can still use `Explore` on its own, which may run on a different model and returns its own report format. That's an accepted trade-off; naming the agent `Explore` instead would make your version replace the built-in everywhere.
+Because `scout` doesn't replace the built-in `Explore`, Claude can still use `Explore` on its own, which may run on a different model and returns its own report format. That's an accepted trade-off; naming the agent `Explore` instead would make your version replace the built-in everywhere.

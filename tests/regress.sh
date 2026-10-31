@@ -44,9 +44,9 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 2 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 8 ] && ok "B1 fresh install copies 2 agents, 8 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 2 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 9 ] && ok "B1 fresh install copies 2 agents, 9 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 11 ] && ok "B1 rerun reports 11 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 12 ] && ok "B1 rerun reports 12 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
@@ -226,19 +226,22 @@ missing=""; for n in $(grep -o '`[a-z-]*`' "$PKG/CLAUDE.md" | tr -d '`' | sort -
 missing=""; for s in '^- Git work only when I ask' '^- Branch:' '<short-kebab-name>' '^- Commits:' '^- PR:' 'Closes #<issue>' '^- Merge only when' 'squash if more' '^- After merging' 'delete the remote and local branch' 'link to the merged PR'; do grep -q -- "$s" "$PKG/CLAUDE.md" || missing="$missing [$s]"; done
 [ -z "$missing" ] && ok "Q8 CLAUDE.md has every git rule: trigger, branch, commit, PR, merge, cleanup, issue update" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
-a="$PKG/agents"; grep -qx 'model: opus' "$a/critic.md" && grep -qx 'effort: high' "$a/critic.md" && grep -qx 'model: haiku' "$a/explorer.md" && grep -qx 'effort: medium' "$a/explorer.md" \
-  && grep -q '^| `critic` | opus | high |' "$PKG/README.md" && grep -q '^| `explorer` | haiku | medium |' "$PKG/README.md" \
-  && ok "Q10 critic is opus/high and explorer haiku/medium, in the agents and README" || bad Q10 "model or effort differs"
+a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: high' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: low' "$a/scout.md" \
+  && grep -q '^| `critic` | sonnet | high |' "$PKG/README.md" && grep -q '^| `scout` | haiku | low |' "$PKG/README.md" \
+  && ok "Q10 critic is sonnet/high and scout haiku/low, in the agents and README" || bad Q10 "model or effort differs"
 # (bracketed so this line doesn't match itself)
-legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf|[r]eviewer'
+legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf|[r]eviewer|[e]xplorer'
 hits=$(cd "$PKG" && grep -nE "$legacy" README.md install.sh tests/regress.sh CLAUDE.md skills/*/SKILL.md)
 [ -z "$hits" ] && ok "Q11 no earlier names or upgrade paths are left" || bad Q11 "$(printf '%s' "$hits" | head -3 | cut -c1-80)"
-s="$PKG/skills/critic/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
-[ "$(sed -n 1p "$s" 2>/dev/null)" = '---' ] && [ "$(printf '%s\n' "$fm" | tail -n 1)" = '---' ] || missing="$missing [frontmatter between --- lines]"
-for l in 'context: fork' 'agent: critic' 'background: false' 'disable-model-invocation: true'; do printf '%s\n' "$fm" | grep -qx "$l" || missing="$missing [$l]"; done
-printf '%s\n' "$fm" | grep -qE '^(model|effort):' && missing="$missing [sets model or effort]"
-sed '1,/^---$/d' "$s" 2>/dev/null | grep -q '\$ARGUMENTS' || missing="$missing [\$ARGUMENTS in the body]"
-[ -z "$missing" ] && ok "Q12 /critic starts the critic agent: forked, waited for, run only by you, at the agent's model and effort" || bad Q12 "skills/critic/SKILL.md:$missing"
+for n in critic scout; do
+  s="$PKG/skills/$n/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
+  [ -f "$PKG/agents/$n.md" ] || missing="$missing [no agents/$n.md]"
+  [ "$(sed -n 1p "$s" 2>/dev/null)" = '---' ] && [ "$(printf '%s\n' "$fm" | tail -n 1)" = '---' ] || missing="$missing [frontmatter between --- lines]"
+  for l in 'context: fork' "agent: $n" 'background: false' 'disable-model-invocation: true'; do printf '%s\n' "$fm" | grep -qx "$l" || missing="$missing [$l]"; done
+  printf '%s\n' "$fm" | grep -qE '^(model|effort):' && missing="$missing [sets model or effort]"
+  sed '1,/^---$/d' "$s" 2>/dev/null | grep -q '\$ARGUMENTS' || missing="$missing [\$ARGUMENTS in the body]"
+  [ -z "$missing" ] && ok "Q12 /$n starts the $n agent: forked, waited for, run only by you, at the agent's model and effort" || bad Q12 "skills/$n/SKILL.md:$missing"
+done
 
 echo
 echo "passed $PASS, failed $FAIL"
