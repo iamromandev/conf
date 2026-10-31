@@ -8,7 +8,7 @@ description: Talk a vague idea or loose feature request through with the user, o
 Settle what to build with the user, in this conversation, before anything gets specced or planned. Subagents can't ask the user questions; this skill exists so that part happens here.
 
 ## Process
-1. Look first. Skim the relevant code and docs (use `explorer` for broad searches) so your questions are grounded in what exists.
+1. Look first. Skim the relevant code and docs (use `scout` for broad searches) so your questions are grounded in what exists.
 2. Ask one question at a time. Prefer multiple choice with your recommended option first; use AskUserQuestion when it's available.
 3. Cover, in roughly this order:
    - the problem and who it's for
