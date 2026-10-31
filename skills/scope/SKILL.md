@@ -19,7 +19,7 @@ Settle what to build with the user, in this conversation, before anything gets s
 4. Where there's a real design choice, propose 2-3 approaches with trade-offs and recommend one.
 5. Stop once further answers wouldn't change the scope. Usually that's 3-8 questions.
 6. Play it back in a short summary: goal, in scope, out of scope, chosen approach, assumptions. Ask the user to confirm or correct it.
-7. Hand off: go on with the `spec` skill, using the confirmed summary (and a file path if the user wants the spec saved).
+7. Hand off: go on with the `spec` skill, using the confirmed summary. Under `foreman` the spec goes in the task folder; otherwise pass a file path if the user wants it saved.
 
 ## Rules
 - No code and no file edits while scoping.

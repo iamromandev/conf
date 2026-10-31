@@ -10,6 +10,6 @@ disable-model-invocation: true
 
 # Smith
 
-Carry out the plan, or fix the review findings, that follow. If they point to a file, read it first. If nothing follows, reply that `/smith` needs a plan or review findings, such as `/smith docs/plan.md`, and stop.
+Carry out the plan, or fix the review findings, that follow. If they point to a file, read it first. If nothing follows, reply that `/smith` needs a plan or review findings, such as `/smith .claude/tasks/<slug>/plan.md`, and stop.
 
 $ARGUMENTS

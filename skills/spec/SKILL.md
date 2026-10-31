@@ -11,7 +11,7 @@ A spec says what to build and why; the `blueprint` skill decides how. Write it s
 1. Restate the request in one or two sentences. Identify who it's for and the problem it solves.
 2. Research the existing system only as far as the spec needs: the code, docs and tests the change touches, so the spec matches current behavior, terminology and constraints. Skip what you already read in this conversation.
 3. Open questions: ask the user the ones whose answer would change the scope, one at a time (AskUserQuestion when it's available). For the rest, state the assumption you're taking.
-4. Write the spec. Save it only if the user gave a path (e.g. `docs/specs/<name>.md`); otherwise put it in your reply.
+4. Write the spec. Under `foreman`, save it as `spec.md` in the task folder. Otherwise save it only if the user gave a path (e.g. `docs/specs/<name>.md`), and put it in your reply if not.
 5. Hand off: go on with the `blueprint` skill, using the spec.
 
 ## Rules

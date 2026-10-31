@@ -44,9 +44,9 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 10 ] && ok "B1 fresh install copies 3 agents, 10 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 11 ] && ok "B1 fresh install copies 3 agents, 11 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 14 ] && ok "B1 rerun reports 14 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 15 ] && ok "B1 rerun reports 15 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
@@ -254,8 +254,54 @@ s="$PKG/agents/smith.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
 for t in Edit Write Bash; do printf '%s\n' "$fm" | grep '^tools:' | grep -q "$t" || missing="$missing [tools: $t]"; done
 printf '%s\n' "$fm" | grep -A3 -x 'skills:' | grep -qx '  - tdd' || missing="$missing [skills: - tdd]"
 for p in "can't ask the user" 'report Blocked' 'leave the code building' 'files you touched'; do sed '1,/^---$/d' "$s" 2>/dev/null | grep -q "$p" || missing="$missing [$p]"; done
-grep '^- Run `spec`' "$PKG/CLAUDE.md" | grep 'continue that same `smith`' | grep -q 'start a new one with the plan, its Blocked report and my answer' || missing="$missing [CLAUDE.md: continue smith, or start a new one]"
+f="$PKG/skills/foreman/SKILL.md"
+grep -qF 'continue that same `smith`' "$f" 2>/dev/null && grep -qF 'start a new one with the plan, its Blocked report and the answer' "$f" 2>/dev/null || missing="$missing [foreman: continue smith, or start a new one]"
 [ -z "$missing" ] && ok "Q15 smith can edit and run commands, preloads tdd, and reports Blocked instead of asking, leaving work a new run can pick up" || bad Q15 "agents/smith.md:$missing"
+
+s="$PKG/skills/foreman/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
+[ "$(sed -n 1p "$s" 2>/dev/null)" = '---' ] && [ "$(printf '%s\n' "$fm" | tail -n 1)" = '---' ] || missing="$missing [frontmatter between --- lines]"
+printf '%s\n' "$fm" | grep -qx 'name: foreman' || missing="$missing [name: foreman]"
+printf '%s\n' "$fm" | grep -qE '^(disable-model-invocation|context|agent):' && missing="$missing [frontmatter sets disable-model-invocation, context or agent]"
+body=$(sed '1,/^---$/d' "$s" 2>/dev/null)
+for t in '.claude/tasks/' '.git/info/exclude' '**/.claude/tasks/' 'status.md' 'spec.md' 'plan.md' 'Route:' '[plan]' "the user's OK" 'continue that same `smith`'; do printf '%s\n' "$body" | grep -qF -- "$t" || missing="$missing [$t]"; done
+[ -z "$missing" ] && ok "Q16 foreman is run by Claude or you, inline, and keeps the task in .claude/tasks/" || bad Q16 "skills/foreman/SKILL.md:$missing"
+c="$PKG/CLAUDE.md"; missing=""
+grep '^- Non-trivial change' "$c" | grep -qF '`foreman`' || missing="$missing [Non-trivial line names foreman]"
+grep -q '^- Vague' "$c" && missing="$missing [still has a Vague line]"
+grep -q '^- Give `critic`' "$c" && missing="$missing [still has the Give critic line]"
+sed -n 3p "$c" | grep -qF '`foreman`' || missing="$missing [line 3 names foreman]"
+grep '^- Non-trivial change' "$c" | grep -qF 'known cause' || missing="$missing [Non-trivial line says fix with a known cause]"
+grep '^- Non-trivial change' "$c" | grep -qF 'multi-file' && missing="$missing [Non-trivial line still says multi-file fix]"
+# 2654 bytes was CLAUDE.md's size before foreman. It mustn't grow: it loads into every session and every subagent.
+[ "$(wc -c < "$c")" -le 2654 ] || missing="$missing [over 2654 bytes]"
+[ -z "$missing" ] && ok "Q17 CLAUDE.md sends non-trivial work to foreman and keeps subagents out of it" || bad Q17 "CLAUDE.md:$missing"
+missing=""
+has() { grep -qF -- "$2" "$PKG/$1" 2>/dev/null || missing="$missing [$1: $2]"; }
+has skills/blueprint/SKILL.md '**Acceptance criteria**'; has skills/blueprint/SKILL.md '**Phases**'; has skills/blueprint/SKILL.md 'plan.md'
+has skills/spec/SKILL.md 'spec.md'; has skills/spec/SKILL.md '`foreman`'; has skills/scope/SKILL.md '`foreman`'; has skills/inspect/SKILL.md '`foreman`'
+has agents/smith.md "The plan doesn't hold"; has agents/smith.md 'acceptance criteria'
+has agents/critic.md '**Acceptance criteria**'; has agents/critic.md '[plan]'
+has skills/smith/SKILL.md '.claude/tasks/<slug>/plan.md'; grep -qF 'docs/plan.md' "$PKG/skills/smith/SKILL.md" && missing="$missing [skills/smith still has docs/plan.md]"
+has skills/ship/SKILL.md 'status.md'
+grep -q '^| `foreman` |' "$PKG/README.md" || missing="$missing [README foreman row]"
+has README.md '.claude/tasks/<slug>/'; has README.md '/foreman <slug>'
+[ -z "$missing" ] && ok "Q18 acceptance criteria and plan-level findings are named in blueprint, smith, critic, spec, ship, inspect and the README" || bad Q18 "missing:$missing"
+
+# foreman's order, resume, fix round and status.md; how ship finds the task's status.md; what a direct /smith or /critic returns
+missing=""; f="$PKG/skills/foreman/SKILL.md"; g="$PKG/skills/ship/SKILL.md"
+lno() { grep -nF -- "$1" "$f" 2>/dev/null | head -1 | cut -d: -f1; }
+a=$(lno '1. **Resume or new.**'); b=$(lno '2. **Issue.**'); c=$(lno '3. **Triage.**'); d=$(lno '4. **Route.**'); e=$(lno '5. **Task folder.**')
+{ [ -n "$a" ] && [ -n "$b" ] && [ -n "$c" ] && [ -n "$d" ] && [ -n "$e" ] && [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && [ "$c" -lt "$d" ] && [ "$d" -lt "$e" ]; } || missing="$missing [foreman Start order: resume, issue, triage, route, task folder]"
+has skills/foreman/SKILL.md 'in progress'; has skills/foreman/SKILL.md '- Parent:'; has skills/foreman/SKILL.md '- Branch: <branch>'
+has skills/foreman/SKILL.md 'is checked out'; has skills/foreman/SKILL.md 'simply runs again'
+has skills/foreman/SKILL.md 'on top of the code already in the tree'; has skills/foreman/SKILL.md 'none are dropped'
+has skills/foreman/SKILL.md 'covers only the first OK'; has skills/foreman/SKILL.md 'always waits for the user'
+has skills/foreman/SKILL.md 'the files `smith`'; has skills/foreman/SKILL.md 'next free number'; has skills/foreman/SKILL.md 'names a different issue or task'
+has skills/foreman/SKILL.md 'the exclude write fails'
+has skills/foreman/SKILL.md "belongs to that task"; has skills/foreman/SKILL.md 'no task described in the conversation'
+has skills/ship/SKILL.md '.claude/tasks/*/status.md'; has skills/ship/SKILL.md '`.claude/tasks/` is never committed'; has skills/ship/SKILL.md '`- Parent:`'
+has README.md 'returns its report to you'
+[ -z "$missing" ] && ok "Q19 foreman orders its start, resumes safely and completes the fix round; ship finds status.md; README says what a direct /smith returns" || bad Q19 "missing:$missing"
 
 echo
 echo "passed $PASS, failed $FAIL"
