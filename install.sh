@@ -8,7 +8,8 @@
 #   --dry-run  show what would change, including a diff of CLAUDE.md, without touching anything
 #
 # Agents and skills that differ from the package's are overwritten, and CLAUDE.md is updated in
-# place, all with no backup; --dry-run lists what would change, with a diff of CLAUDE.md.
+# place, all with no backup. Skills the package no longer ships are removed too, but only when they
+# are unedited copies of what it shipped; --dry-run lists what would change, with a diff of CLAUDE.md.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -25,6 +26,29 @@ for arg in "$@"; do
 done
 
 HEADING='## Claude Code subagents'
+# Skills that were folded into foreman or dropped. An installed copy is removed only when its
+# SKILL.md matches a version the package shipped (name, then the cksum CRC and size of every
+# committed version), so edits are never lost.
+# Regenerate the table with: for n in scope spec blueprint critic scout smith; do for h in $(git log --all --format=%H -- skills/$n/SKILL.md); do
+#   git cat-file -e ${h}:skills/$n/SKILL.md 2>/dev/null && git show ${h}:skills/$n/SKILL.md | cksum | awk -v n=$n '{print n, $1, $2}'; done; done | LC_ALL=C sort -u
+DROPPED_SUMS='scope 1464149793 1671
+scope 1850656964 1731
+scope 2397017297 1677
+scope 444992623 1673
+scope 539014874 1680
+spec 2485795970 2063
+spec 608208590 2132
+blueprint 2435392841 2018
+blueprint 3587188867 1760
+blueprint 3818170450 2582
+blueprint 570604850 1889
+blueprint 580559103 1886
+critic 809818994 614
+scout 4244998468 671
+smith 12583037 601
+smith 3982734297 619
+smith 643281056 617'
+DROPPED_SKILLS="$(printf '%s\n' "$DROPPED_SUMS" | awk '!seen[$1]++ { print $1 }')"
 # The last line of the section. Claude Code drops HTML comments from CLAUDE.md, so it costs nothing,
 # and it shows where the section ends.
 END_MARK='<!-- conf: end of section -->'
@@ -152,6 +176,7 @@ say() {
       updated) verb="would update" ;;
       appended) verb="would append" ;;
       created) verb="would create" ;;
+      removed) verb="would remove" ;;
     esac
   fi
   printf '%-14s %s\n' "$verb" "$*"
@@ -252,6 +277,24 @@ for d in "$SRC"/skills/*/; do
   say "$copied" "$rel"
 done
 
+# Skills the package no longer ships: remove an installed folder only if it is a real folder holding
+# just SKILL.md (a .DS_Store file is ignored), and that file is a version the package shipped. Anything else is left
+# alone, and so is a name the package ships again.
+for n in $DROPPED_SKILLS; do
+  target="$DEST/skills/$n"
+  if [ -d "$SRC/skills/$n" ]; then continue; fi
+  if [ ! -e "$target" ] && [ ! -L "$target" ]; then continue; fi
+  if [ -d "$target" ] && [ ! -L "$target" ] && [ "$(ls -A "$target" | grep -vxF .DS_Store)" = "SKILL.md" ] \
+    && [ ! -d "$target/.DS_Store" ] \
+    && [ -f "$target/SKILL.md" ] && [ ! -L "$target/SKILL.md" ] \
+    && printf '%s\n' "$DROPPED_SUMS" | grep -qxF "$n $(cksum < "$target/SKILL.md" | awk '{print $1, $2}')"; then
+    clear_target "$target"
+    say removed "skills/$n"
+  else
+    say warning "skills/$n differs from every copy this package shipped (edited, extra files, or a link), so it's left alone. If it's an old copy of the package's, delete it."
+  fi
+done
+
 # CLAUDE.md, as worked out above
 case "$verb" in
   unchanged) say unchanged "$CLAUDE_MD" ;;
@@ -290,7 +333,7 @@ done
 # superpowers overlaps with these skills
 for settings in "$HOME/.claude/settings.json" "$DEST/settings.json" "$DEST/settings.local.json"; do
   if grep -Eqs '"superpowers@[^"]*"[[:space:]]*:[[:space:]]*true' "$settings"; then
-    say warning "superpowers is enabled in $settings. Uninstall it with /plugin in Claude Code; its brainstorming and debugging skills overlap with scope and inspect."
+    say warning "superpowers is enabled in $settings. Uninstall it with /plugin in Claude Code; its brainstorming and debugging skills overlap with foreman and inspect."
     break
   fi
 done
