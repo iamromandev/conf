@@ -44,9 +44,9 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 8 ] && ok "B1 fresh install copies 3 agents, 8 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 6 ] && ok "B1 fresh install copies 3 agents, 6 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 12 ] && ok "B1 rerun reports 12 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && ok "B1 rerun reports 10 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
@@ -55,19 +55,19 @@ H=$(newhome b6); out=$(cd "$H" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] 
 out=$(cd "$PKG" && inst "$H" "" --project); rc=$?; [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "that's the conf package itself" && ok "B6 --project refused in package (exit $rc)" || bad B6 "not refused in package (exit $rc)"
 H=$(newhome b7); put "$H" 'abc'; inst "$H" >/dev/null
 same "B7 append after a file with no final newline" "$H/.claude/CLAUDE.md" "$(printf 'abc\n\n%s' "$SEC")"; idem B7 "$H"
-H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/check"; printf 'my edit\n' > "$H/.claude/agents/critic.md"; printf 'my skill edit\n' > "$H/.claude/skills/check/SKILL.md"; printf 'mine\n' > "$H/.claude/skills/check/extra.md"
+H=$(newhome b8); mkdir -p "$H/.claude/agents" "$H/.claude/skills/tdd"; printf 'my edit\n' > "$H/.claude/agents/critic.md"; printf 'my skill edit\n' > "$H/.claude/skills/tdd/SKILL.md"; printf 'mine\n' > "$H/.claude/skills/tdd/extra.md"
 chmod a-w "$H/.claude/agents/critic.md"; out=$(inst "$H")
 cmp -s "$PKG/agents/critic.md" "$H/.claude/agents/critic.md" && printf '%s' "$out" | grep -q '^replaced       agents/critic.md$' && ok "B8 a changed agent is replaced in place, even if it's read-only" || bad B8 "not replaced: $(printf '%s' "$out" | grep -m1 critic)"
-diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && printf '%s' "$out" | grep -q '^replaced       skills/check$' && ok "B8 a changed skill folder is replaced whole, extra files included" || bad B8 "skill not replaced: $(printf '%s' "$out" | grep -m1 skills/check)"
+diff -rq "$PKG/skills/tdd" "$H/.claude/skills/tdd" >/dev/null && printf '%s' "$out" | grep -q '^replaced       skills/tdd$' && ok "B8 a changed skill folder is replaced whole, extra files included" || bad B8 "skill not replaced: $(printf '%s' "$out" | grep -m1 skills/tdd)"
 if ls -d "$H"/.claude/conf-backup-* >/dev/null 2>&1 || printf '%s' "$out" | grep -qi 'backup'; then bad B8 "a backup was made: $(ls "$H/.claude")"; else ok "B8 nothing is backed up"; fi
 if [ "$(id -u)" != 0 ]; then
-  H=$(newhome b10); mkdir -p "$H/.claude/skills/check"; printf 'my skill edit\n' > "$H/.claude/skills/check/SKILL.md"; chmod -R a-w "$H/.claude/skills/check"; out=$(inst "$H"); rc=$?; chmod -R u+w "$H/.claude/skills"
-  [ $rc = 0 ] && diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && ok "B10 a read-only skill folder is replaced too" || bad B10 "rc=$rc $(printf '%s' "$out" | grep -m1 -i 'rm:\|error')"
+  H=$(newhome b10); mkdir -p "$H/.claude/skills/tdd"; printf 'my skill edit\n' > "$H/.claude/skills/tdd/SKILL.md"; chmod -R a-w "$H/.claude/skills/tdd"; out=$(inst "$H"); rc=$?; chmod -R u+w "$H/.claude/skills"
+  [ $rc = 0 ] && diff -rq "$PKG/skills/tdd" "$H/.claude/skills/tdd" >/dev/null && ok "B10 a read-only skill folder is replaced too" || bad B10 "rc=$rc $(printf '%s' "$out" | grep -m1 -i 'rm:\|error')"
 else
   echo "skip B10 read-only skill folder (running as root)"
 fi
-H=$(newhome b11); mkdir -p "$T/b11-mine" "$H/.claude/skills"; printf 'keep\n' > "$T/b11-mine/KEEP"; ln -s "$T/b11-mine" "$H/.claude/skills/check"; inst "$H" >/dev/null
-[ ! -L "$H/.claude/skills/check" ] && diff -rq "$PKG/skills/check" "$H/.claude/skills/check" >/dev/null && [ "$(ls "$T/b11-mine")" = KEEP ] && ok "B11 a symlinked skill folder is replaced by a copy, the folder it pointed to untouched" || bad B11 "link=$([ -L "$H/.claude/skills/check" ] && echo yes || echo no) target=$(ls "$T/b11-mine" | tr '\n' ' ')"
+H=$(newhome b11); mkdir -p "$T/b11-mine" "$H/.claude/skills"; printf 'keep\n' > "$T/b11-mine/KEEP"; ln -s "$T/b11-mine" "$H/.claude/skills/tdd"; inst "$H" >/dev/null
+[ ! -L "$H/.claude/skills/tdd" ] && diff -rq "$PKG/skills/tdd" "$H/.claude/skills/tdd" >/dev/null && [ "$(ls "$T/b11-mine")" = KEEP ] && ok "B11 a symlinked skill folder is replaced by a copy, the folder it pointed to untouched" || bad B11 "link=$([ -L "$H/.claude/skills/tdd" ] && echo yes || echo no) target=$(ls "$T/b11-mine" | tr '\n' ' ')"
 H=$(newhome b12); mkdir -p "$H/.claude/agents"; printf 'mine\n' > "$T/b12-mine.md"; ln -s "$T/b12-mine.md" "$H/.claude/agents/critic.md"; inst "$H" >/dev/null
 [ ! -L "$H/.claude/agents/critic.md" ] && cmp -s "$PKG/agents/critic.md" "$H/.claude/agents/critic.md" && [ "$(cat "$T/b12-mine.md")" = mine ] && ok "B12 a symlinked agent file is replaced by a copy, the file it pointed to untouched" || bad B12 "link=$([ -L "$H/.claude/agents/critic.md" ] && echo yes || echo no) target=$(cat "$T/b12-mine.md" | head -1)"
 H=$(newhome b9); put "$H" '# Mine\n\nstuff\n'; inst "$H" >/dev/null
@@ -227,7 +227,7 @@ g="$PKG/skills/ship/SKILL.md"; missing=""
 grep '^- Git work' "$PKG/CLAUDE.md" | grep 'push' | grep 'only when I ask' | grep 'Load the `ship` skill first' | grep -q 'take precedence over the default git instructions where they conflict' || missing="$missing [CLAUDE.md: a git line covering push, only when I ask, loading ship first, taking precedence over the defaults only where they conflict]"
 sed -n 's/^description: //p' "$g" 2>/dev/null | grep -q 'push' || missing="$missing [ship description: push]"
 for s in '<short-kebab-name>' 'Closes #<issue>' 'squash if more'; do grep -q -- "$s" "$PKG/CLAUDE.md" && missing="$missing [CLAUDE.md still has: $s]"; done
-for s in 'Run the `check` skill' '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -q -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
+for s in "run the project's tests" '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -qi -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
 [ -z "$missing" ] && ok "Q8 the git rules (branch, commit, PR, merge, cleanup, issue update) are in the ship skill, and CLAUDE.md only says to use it when asked" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
 a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: high' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: low' "$a/scout.md" \
@@ -240,91 +240,109 @@ hits=$(cd "$PKG" && grep -nE "$legacy|[b]uild (report|skill)" README.md install.
 # The agents only get the build checks: critic's prompt names its role (code review) with a word on the list above
 hits="$hits$(cd "$PKG" && grep -nE '`[b]uild`|[b]uild (report|skill)' agents/*.md)"
 [ -z "$hits" ] && ok "Q11 no earlier names or upgrade paths are left" || bad Q11 "$(printf '%s' "$hits" | head -3 | cut -c1-80)"
-[ "$(ls "$PKG/skills" | tr '\n' ' ')" = "blueprint check foreman inspect scope ship spec tdd " ] && ok "Q12 the package ships exactly the skills blueprint, check, foreman, inspect, scope, ship, spec and tdd" || bad Q12 "skills/ holds: $(ls "$PKG/skills" | tr '\n' ' ')"
-grep '^- Mechanical changes' "$PKG/CLAUDE.md" | grep '`foreman`' | grep '`critic`' | grep 'logic, security, auth or data' | grep -q 'keeps the meaning' && ok "Q13 mechanical changes skip foreman and critic, unless they touch logic, security, auth or data" || bad Q13 "no mechanical-changes route with its limits"
+[ "$(ls "$PKG/skills" | tr '\n' ' ')" = "blueprint inspect scope ship spec tdd " ] && ok "Q12 the package ships exactly the skills blueprint, inspect, scope, ship, spec and tdd" || bad Q12 "skills/ holds: $(ls "$PKG/skills" | tr '\n' ' ')"
+grep '^- Mechanical changes' "$PKG/CLAUDE.md" | grep '`critic`' | grep 'logic, security, auth or data' | grep -q 'keeps the meaning' && ok "Q13 mechanical changes skip the plan steps and critic, unless they touch logic, security, auth or data" || bad Q13 "no mechanical-changes route with its limits"
 s="$PKG/agents/smith.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
 for t in Edit Write Bash; do printf '%s\n' "$fm" | grep '^tools:' | grep -q "$t" || missing="$missing [tools: $t]"; done
 printf '%s\n' "$fm" | grep -A3 -x 'skills:' | grep -qx '  - tdd' || missing="$missing [skills: - tdd]"
 for p in "can't ask the user" 'report Blocked' 'leave the code building' 'files you touched'; do sed '1,/^---$/d' "$s" 2>/dev/null | grep -q "$p" || missing="$missing [$p]"; done
-f="$PKG/skills/foreman/SKILL.md"
-grep -qF 'continue that same `smith`' "$f" 2>/dev/null && grep -qF 'start a new one with the plan, its Blocked report and the answer' "$f" 2>/dev/null || missing="$missing [foreman: continue smith, or start a new one]"
+sed '1,/^---$/d' "$s" 2>/dev/null | grep -qF 'as text' || missing="$missing [smith: a plan can arrive as text]"
+sed -n 's/^description: //p' "$s" 2>/dev/null | grep -qF '/blueprint' || missing="$missing [smith description: usually from /blueprint]"
 [ -z "$missing" ] && ok "Q15 smith can edit and run commands, preloads tdd, and reports Blocked instead of asking, leaving work a new run can pick up" || bad Q15 "agents/smith.md:$missing"
 
-s="$PKG/skills/foreman/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
-[ "$(sed -n 1p "$s" 2>/dev/null)" = '---' ] && [ "$(printf '%s\n' "$fm" | tail -n 1)" = '---' ] || missing="$missing [frontmatter between --- lines]"
-printf '%s\n' "$fm" | grep -qx 'name: foreman' || missing="$missing [name: foreman]"
-printf '%s\n' "$fm" | grep -qE '^(disable-model-invocation|context|agent):' && missing="$missing [frontmatter sets disable-model-invocation, context or agent]"
-body=$(sed '1,/^---$/d' "$s" 2>/dev/null)
-for t in 'docs/conf/tasks/' '.git/info/exclude' '**/docs/conf/tasks/' 'status.md' 'spec.md' 'plan.md' 'Route:' '[plan]' "the user's OK" 'continue that same `smith`'; do printf '%s\n' "$body" | grep -qF -- "$t" || missing="$missing [$t]"; done
-[ -z "$missing" ] && ok "Q16 foreman is run by Claude or you, inline, and keeps the task in docs/conf/tasks/" || bad Q16 "skills/foreman/SKILL.md:$missing"
 c="$PKG/CLAUDE.md"; missing=""
-grep '^- Non-trivial change' "$c" | grep -qF '`foreman`' || missing="$missing [Non-trivial line names foreman]"
+nt=$(grep '^- Non-trivial change' "$c")
+for t in '`/scope`' '`/spec`' '`/blueprint`' '`smith`' '`critic`' '`tdd`' 'known cause' 'only the step I ask for'; do printf '%s\n' "$nt" | grep -qF -- "$t" || missing="$missing [Non-trivial line: $t]"; done
 grep -q '^- Vague' "$c" && missing="$missing [still has a Vague line]"
 grep -q '^- Give `critic`' "$c" && missing="$missing [still has the Give critic line]"
-for n in scope spec blueprint; do grep -qF "\`$n\`" "$c" && missing="$missing [still names \`$n\`]"; done
-sed -n 3p "$c" | grep -qF '`foreman`' || missing="$missing [line 3 names foreman]"
-grep '^- Non-trivial change' "$c" | grep -qF 'known cause' || missing="$missing [Non-trivial line says fix with a known cause]"
-grep '^- Non-trivial change' "$c" | grep -qF 'multi-file' && missing="$missing [Non-trivial line still says multi-file fix]"
+printf '%s\n' "$nt" | grep -qF 'multi-file' && missing="$missing [Non-trivial line still says multi-file fix]"
+sed -n 3p "$c" | grep -qF 'without dispatching other agents unless that task says to' || missing="$missing [line 3 says subagents dispatch no other agents]"
+grep '^- Before saying work is done' "$c" | grep -qF 'run the tests or checks and read their output' && grep '^- Before saying work is done' "$c" | grep -qF 'confirm a subagent' || missing="$missing [verify-before-done line]"
 # 2654 bytes was CLAUDE.md's size before foreman. It mustn't grow: it loads into every session and every subagent.
 [ "$(wc -c < "$c")" -le 2654 ] || missing="$missing [over 2654 bytes]"
-[ -z "$missing" ] && ok "Q17 CLAUDE.md sends non-trivial work to foreman and keeps subagents out of it" || bad Q17 "CLAUDE.md:$missing"
+[ -z "$missing" ] && ok "Q17 CLAUDE.md sends non-trivial work down the user-run chain, asks to verify before done and keeps subagents out of it" || bad Q17 "CLAUDE.md:$missing"
+# nothing shipped names the removed orchestrator or check skill, or the task status file
+hits=$(cd "$PKG" && grep -niE 'foreman|`check`|the check skill|(^|[ (])/check\b|status\.md' CLAUDE.md README.md agents/*.md skills/*/SKILL.md | grep -v '^README.md:[0-9]*:- Removes the skills the package no longer ships')  # the README's install note names the removed skills
+[ -z "$hits" ] && ok "Q22 no shipped file names foreman, the check skill, /check or status.md" || bad Q22 "$(printf '%s' "$hits" | head -3 | cut -c1-80)"
 missing=""
 has() { grep -qF -- "$2" "$PKG/$1" 2>/dev/null || missing="$missing [$1: $2]"; }
 has skills/blueprint/SKILL.md '**Acceptance criteria**'; has skills/blueprint/SKILL.md '**Phases**'; has skills/spec/SKILL.md '**Goals / Non-goals**'; has skills/scope/SKILL.md 'one question at a time'
-has skills/inspect/SKILL.md '`foreman`'
+has skills/inspect/SKILL.md '`/blueprint`'
 has agents/smith.md "The plan doesn't hold"; has agents/smith.md 'acceptance criteria'
-has agents/critic.md '**Acceptance criteria**'; has agents/critic.md '[plan]'
-has skills/ship/SKILL.md 'status.md'
-grep -q '^| `foreman` |' "$PKG/README.md" || missing="$missing [README foreman row]"
-has README.md 'docs/conf/tasks/<slug>/'; has README.md '/foreman <slug>'
+has agents/critic.md '**Acceptance criteria'; has agents/critic.md '[plan]'; has agents/critic.md 'as text'
+has skills/ship/SKILL.md '`docs/conf/tasks/` is never committed'
+grep -q '^| `foreman` |' "$PKG/README.md" && missing="$missing [README still has a foreman row]"
+grep -q '^| `check` |' "$PKG/README.md" && missing="$missing [README still has a check row]"
+has README.md 'docs/conf/tasks/<slug>/'
 # the dropped skills and their slash commands are named nowhere (this file is left out, since it names them)
-hits=$(cd "$PKG" && grep -nE '(^|[ `(])/(critic|scout|smith)\b' CLAUDE.md README.md agents/*.md skills/*/SKILL.md)
+hits=$(cd "$PKG" && grep -nE '(^|[ `(])/(critic|scout|smith|foreman|check)\b' CLAUDE.md README.md agents/*.md skills/*/SKILL.md)
 [ -z "$hits" ] || missing="$missing [still names a dropped skill or its slash command: $(printf '%s' "$hits" | head -2 | cut -c1-60 | tr '\n' ' ')]"
-[ -z "$missing" ] && ok "Q18 acceptance criteria and plan-level findings are named in foreman, smith, critic, inspect, ship and the README, and no dropped skill is named" || bad Q18 "missing:$missing"
+[ -z "$missing" ] && ok "Q18 acceptance criteria and plan-level findings are named in blueprint, smith, critic, inspect, ship and the README, and no dropped skill is named" || bad Q18 "missing:$missing"
 
-# foreman's order, resume, fix round and status.md; how ship finds the task's status.md; what foreman does with a plan that doesn't hold
-missing=""; f="$PKG/skills/foreman/SKILL.md"; g="$PKG/skills/ship/SKILL.md"
-lno() { grep -nF -- "$1" "$f" 2>/dev/null | head -1 | cut -d: -f1; }
-a=$(lno '1. **Resume or new.**'); b=$(lno '2. **Issue.**'); c=$(lno '3. **Triage.**'); d=$(lno '4. **Route.**'); e=$(lno '5. **Task folder.**')
-{ [ -n "$a" ] && [ -n "$b" ] && [ -n "$c" ] && [ -n "$d" ] && [ -n "$e" ] && [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && [ "$c" -lt "$d" ] && [ "$d" -lt "$e" ]; } || missing="$missing [foreman Start order: resume, issue, triage, route, task folder]"
-has skills/foreman/SKILL.md 'in progress'; has skills/foreman/SKILL.md '- Parent:'; has skills/foreman/SKILL.md '- Branch: <branch>'
-has skills/foreman/SKILL.md 'is checked out'; has skills/foreman/SKILL.md 'simply runs again'
-has skills/foreman/SKILL.md 'on top of the code already in the tree'; has skills/foreman/SKILL.md 'none are dropped'
-has skills/foreman/SKILL.md 'covers only the first OK'; has skills/foreman/SKILL.md 'always waits for the user'
-has skills/foreman/SKILL.md 'the files `smith`'; has skills/foreman/SKILL.md 'next free number'; has skills/foreman/SKILL.md 'names a different issue or task'
-has skills/foreman/SKILL.md 'the exclude write fails'
-has skills/foreman/SKILL.md '**Back to the plan.**'
-grep -qF ".claude/tasks" "$f" && missing="$missing [foreman still names .claude/tasks]"
-has skills/foreman/SKILL.md "belongs to that task"; has skills/foreman/SKILL.md 'no task described in the conversation'
-has skills/ship/SKILL.md 'docs/conf/tasks/*/status.md'; has skills/ship/SKILL.md '`docs/conf/tasks/` is never committed'; has skills/ship/SKILL.md '`- Parent:`'
-[ -z "$missing" ] && ok "Q19 foreman orders its start, resumes safely and completes the fix round; ship finds status.md; foreman sends a plan that doesn't hold back to the plan" || bad Q19 "missing:$missing"
+# ship runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
+missing=""; g="$PKG/skills/ship/SKILL.md"
+for t in "Run the project's tests" 'stop and report if they fail' 'keep it' '`docs/conf/tasks/` is never committed' "the PR's existing base"; do grep -qF -- "$t" "$g" 2>/dev/null || missing="$missing [ship: $t]"; done
+for t in 'status.md' '`- Parent:`' 'Run the `check` skill'; do grep -qF -- "$t" "$g" 2>/dev/null && missing="$missing [ship still has: $t]"; done
+[ -z "$missing" ] && ok "Q19 ship runs the project's tests before committing and no longer reads a status file" || bad Q19 "missing:$missing"
 
-# scope, spec and blueprint are foreman's steps, loadable on their own
-missing=""; f="$PKG/skills/foreman/SKILL.md"
+# scope, spec and blueprint are loadable on their own, run by the user, and each names the next step
+missing=""
 for n in scope spec blueprint; do
   s="$PKG/skills/$n/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null)
   [ "$(sed -n 1p "$s" 2>/dev/null)" = '---' ] && [ "$(printf '%s\n' "$fm" | tail -n 1)" = '---' ] || missing="$missing [$n: frontmatter between --- lines]"
   printf '%s\n' "$fm" | grep -qx "name: $n" || missing="$missing [$n: name]"
   printf '%s\n' "$fm" | grep -q '^description: .' || missing="$missing [$n: description]"
   printf '%s\n' "$fm" | grep -qE '^(disable-model-invocation|context|agent):' && missing="$missing [$n: sets disable-model-invocation, context or agent]"
-  sed '1,/^---$/d' "$s" 2>/dev/null | grep -qF '/foreman' || missing="$missing [$n: names /foreman]"
   printf '%s\n' "$fm" | grep '^description: ' | grep -qE ': .*: | #|:$' && missing="$missing [$n: description is not plain YAML]"
-  grep -qF "\`$n\`" "$f" 2>/dev/null || missing="$missing [foreman names \`$n\`]"
 done
 has skills/scope/SKILL.md 'vague'; has skills/scope/SKILL.md 'Play it back'
-has skills/spec/SKILL.md 'spec.md'
-has skills/blueprint/SKILL.md 'plan.md'; has skills/blueprint/SKILL.md 'smith'
-has skills/foreman/SKILL.md 'already agreed'
-for t in '^## Scope' '^## Spec' '^## Plan' '**Goals / Non-goals**' 'one question at a time'; do grep -qE -- "$t" "$f" 2>/dev/null && missing="$missing [foreman still has: $t]"; done
-[ "$(wc -c < "$f")" -lt 9000 ] || missing="$missing [foreman is 9000 bytes or more]"
-[ -z "$missing" ] && ok "Q21 scope, spec and blueprint are model-invocable inline skills that point to /foreman, and foreman loads them instead of holding their text" || bad Q21 "missing:$missing"
+has skills/scope/SKILL.md 'Next: `/spec`.'; has skills/spec/SKILL.md 'Next: `/blueprint`.'; has skills/blueprint/SKILL.md 'Next: ask `smith` to build it'
+for n in spec blueprint; do
+  s="$PKG/skills/$n/SKILL.md"
+  has "skills/$n/SKILL.md" '## Save'; has "skills/$n/SKILL.md" '.git/info/exclude'; has "skills/$n/SKILL.md" '**/docs/conf/tasks/'; has "skills/$n/SKILL.md" 'keep'
+  has "skills/$n/SKILL.md" 'docs/conf/tasks/<slug>/'; has "skills/$n/SKILL.md" 'the folder will show up in `git status`'; has "skills/$n/SKILL.md" 'next free number'
+  grep -qF 'Where it goes' "$s" 2>/dev/null && missing="$missing [$n: still has Where it goes]"
+done
+has skills/spec/SKILL.md 'spec.md'; has skills/blueprint/SKILL.md 'plan.md'; has skills/blueprint/SKILL.md "path, or the plan text if it wasn't saved"
+sed -n 's/^description: //p' "$PKG/skills/scope/SKILL.md" | grep -qF '/spec' || missing="$missing [scope description names /spec]"
+sed -n 's/^description: //p' "$PKG/skills/spec/SKILL.md" | grep -qF '/blueprint' || missing="$missing [spec description names /blueprint]"
+sed -n 's/^description: //p' "$PKG/skills/blueprint/SKILL.md" | grep -qF 'smith' || missing="$missing [blueprint description names smith]"
+# fix round: blueprint's input, slug reuse, revising a plan, ship's base, bare requests
+for n in spec blueprint; do
+  has "skills/$n/SKILL.md" 'argument-hint: the request, or a task folder to save to'
+  has "skills/$n/SKILL.md" 'is for the same task (same summary or issue), update it in place'
+done
+has skills/blueprint/SKILL.md 'Start from the spec agreed in this conversation, or the `spec.md` the request names; without either, write your own acceptance criteria.'
+has skills/blueprint/SKILL.md 'revise the existing plan (the saved `plan.md`, or the one in this conversation)'
+grep -q '^Every route\.' "$PKG/skills/blueprint/SKILL.md" && missing="$missing [blueprint still says Every route.]"
+grep -q ' $' "$PKG/skills/spec/SKILL.md" && missing="$missing [spec has trailing spaces]"
+has skills/ship/SKILL.md "isn't known"; has skills/ship/SKILL.md 'ask the user which base to use'
+grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -qF 'For a bare request, suggest `/scope`.' || missing="$missing [CLAUDE.md: bare request suggests /scope]"
+has README.md 'run `/blueprint` again'
+# phase content: scope (AC5), spec (AC6), blueprint (AC7), tdd and smith (AC8), critic (AC9)
+for t in 'single pass' 'Risks & feasibility' '**Size**' 'smallest version worth shipping' 'spike'; do has skills/scope/SKILL.md "$t"; done
+grep -qF 'Only for a vague request' "$PKG/skills/scope/SKILL.md" && missing="$missing [scope still says Only for a vague request]"
+for t in 'R1, R2' 'NFR1, NFR2' 'other than the NFRs' '**Data & interfaces**' '**Open questions**' 'requirement IDs' 'measurable target'; do has skills/spec/SKILL.md "$t"; done
+for t in '**Architecture**' '**Interfaces & data models**' '**Test strategy**' '**Rollout & rollback**' 'n/a' 'requirement IDs'; do has skills/blueprint/SKILL.md "$t"; done
+for t in 'integration' 'end-to-end' 'test strategy' 'outside-in'; do has skills/tdd/SKILL.md "$t"; done
+has agents/smith.md 'test strategy'
+for t in 'Always run the tests' 'end-to-end' "A criterion you can't check is a **Should fix**" 'each requirement ID this phase covers' 'when the spec has IDs' 'no passing test or check' 'Acceptance criteria & requirements' '**Acceptance criteria'; do has agents/critic.md "$t"; done
+grep '^- Read-only' "$PKG/agents/critic.md" | grep -qF 'run the app or the end-to-end path' || missing="$missing [critic Rules: may run the app or end-to-end path]"
+sed -n 's/^description: //p' "$PKG/skills/scope/SKILL.md" | grep -qF 'vague idea' && missing="$missing [scope description still says vague idea]"
+sed -n 's/^description: //p' "$PKG/skills/scope/SKILL.md" | grep -qF 'any request' || missing="$missing [scope description says any request]"
+has skills/scope/SKILL.md "clear request, ask only what's missing, then go to step 6"; has skills/scope/SKILL.md 'applies to a vague request'
+has skills/blueprint/SKILL.md "spec's Open questions"
+has skills/tdd/SKILL.md 'may stay red while'
+grep -qi 'not checkable' "$PKG/agents/critic.md" "$PKG/README.md" && missing="$missing [critic or README still offers not checkable as a status]"
+[ -z "$missing" ] && ok "Q21 scope, spec and blueprint are model-invocable inline skills that name their next step, spec and blueprint ask whether to save, and the scope, spec, blueprint, tdd, smith and critic content covers the SDLC phases" || bad Q21 "missing:$missing"
 
 echo "== Skills the package no longer ships"
 # Real copies of the dropped skills come from the package's git history
-old=""; new=""
+old=""; new=""; cur=""
 if command -v git >/dev/null 2>&1; then
   old=$(git -C "$PKG" rev-parse -q --verify b1d9b06 2>/dev/null) || old=""
   new=$(git -C "$PKG" rev-parse -q --verify 7e339b4 2>/dev/null) || new=""
+  cur=$(git -C "$PKG" rev-parse -q --verify 8badc4a 2>/dev/null) || cur=""
 fi
 if [ -z "$old" ]; then
   echo "skip Q20 installer removes dropped skills (needs git and the package's history)"
@@ -333,8 +351,8 @@ else
   plant() { mkdir -p "$1/.claude/skills/$2"; git -C "$PKG" show "${3:-$old}:skills/$2/SKILL.md" > "$1/.claude/skills/$2/SKILL.md"; }
   H=$(newhome q20a); inst "$H" >/dev/null; plant "$H" scout; plant "$H" smith; out=$(inst "$H"); rc=$?
   [ $rc = 0 ] && [ ! -e "$H/.claude/skills/scout" ] && [ ! -e "$H/.claude/skills/smith" ] && printf '%s\n' "$out" | grep -q '^removed .*skills/scout' && printf '%s\n' "$out" | grep -q '^removed .*skills/smith' && ok "Q20 unedited copies of dropped skills are removed, and the output says so" || bad Q20 "rc=$rc left=$(ls "$H/.claude/skills" | tr '\n' ' ') output: $(printf '%s' "$out" | grep -m1 'scout')"
-  [ "$(ls "$H/.claude/skills" | tr '\n' ' ')" = "blueprint check foreman inspect scope ship spec tdd " ] && ok "Q20 the skills the package ships stay" || bad Q20 "skills: $(ls "$H/.claude/skills" | tr '\n' ' ')"
-  out=$(inst "$H"); printf '%s\n' "$out" | grep -qE '^(removed|would remove|warning) .*skills/(critic|scout|smith)' && bad Q20 "second run: $(printf '%s' "$out" | grep -m1 skills/)" || ok "Q20 a second run says nothing about dropped skills"
+  [ "$(ls "$H/.claude/skills" | tr '\n' ' ')" = "blueprint inspect scope ship spec tdd " ] && ok "Q20 the skills the package ships stay" || bad Q20 "skills: $(ls "$H/.claude/skills" | tr '\n' ' ')"
+  out=$(inst "$H"); printf '%s\n' "$out" | grep -qE '^(removed|would remove|warning) .*skills/(check|critic|foreman|scout|smith)' && bad Q20 "second run: $(printf '%s' "$out" | grep -m1 skills/)" || ok "Q20 a second run says nothing about dropped skills"
   H=$(newhome q20b); inst "$H" >/dev/null; plant "$H" scout; plant "$H" smith; a=$(treesum "$H"); out=$(inst "$H" "" --dry-run)
   [ "$a" = "$(treesum "$H")" ] && [ -f "$H/.claude/skills/scout/SKILL.md" ] && printf '%s\n' "$out" | grep -q '^would remove .*skills/scout' && ok "Q20 --dry-run says it would remove them, and removes nothing" || bad Q20 "dry run: changed=$([ "$a" = "$(treesum "$H")" ] && echo no || echo yes) output: $(printf '%s' "$out" | grep -m1 'scout')"
   H=$(newhome q20c); inst "$H" >/dev/null; plant "$H" scout; printf 'my line\n' >> "$H/.claude/skills/scout/SKILL.md"; out=$(inst "$H"); rc=$?
@@ -352,6 +370,16 @@ else
   P2=$T/pkg-reuse; rm -rf "$P2"; cp -R "$PKG" "$P2"; mkdir -p "$P2/skills/scout"; git -C "$PKG" show "$old:skills/scout/SKILL.md" > "$P2/skills/scout/SKILL.md"
   H=$(newhome q20n); out=$(inst "$H" "$P2")
   [ -f "$H/.claude/skills/scout/SKILL.md" ] && ! printf '%s\n' "$out" | grep -qE '^(removed|warning) .*skills/scout' && ok "Q20 a dropped name the package ships again is installed, not removed" || bad Q20 "shipped scout removed or warned about"
+  if [ -n "$cur" ] && git -C "$PKG" cat-file -e "$cur:skills/foreman/SKILL.md" 2>/dev/null && git -C "$PKG" cat-file -e "$cur:skills/check/SKILL.md" 2>/dev/null; then
+    H=$(newhome q20p); inst "$H" >/dev/null; plant "$H" foreman "$cur"; plant "$H" check "$cur"; out=$(inst "$H"); rc=$?
+    [ $rc = 0 ] && [ ! -e "$H/.claude/skills/foreman" ] && [ ! -e "$H/.claude/skills/check" ] && printf '%s\n' "$out" | grep -q '^removed .*skills/foreman' && printf '%s\n' "$out" | grep -q '^removed .*skills/check' && ok "Q20 unedited foreman and check are removed, and the output says so" || bad Q20 "foreman/check: rc=$rc left=$(ls "$H/.claude/skills" | tr '\n' ' ')"
+    for n in foreman check; do
+      H=$(newhome q20q$n); inst "$H" >/dev/null; plant "$H" "$n" "$cur"; printf 'my line\n' >> "$H/.claude/skills/$n/SKILL.md"; out=$(inst "$H"); rc=$?
+      [ $rc = 0 ] && grep -q 'my line' "$H/.claude/skills/$n/SKILL.md" && printf '%s\n' "$out" | grep -q "^warning .*skills/$n.*differs from every copy this package shipped" && ok "Q20 an edited $n is kept, with a warning" || bad Q20 "edited $n: rc=$rc output: $(printf '%s' "$out" | grep -m1 "$n")"
+    done
+  else
+    echo "skip Q20 foreman and check (commit 8badc4a isn't in the history)"
+  fi
   # A CLAUDE.md that can't be written stops the install before anything is removed
   if [ "$(id -u)" != 0 ]; then
     H=$(newhome q20i); inst "$H" >/dev/null; plant "$H" scout; put "$H" '# Mine\n'; chmod a-w "$H/.claude/CLAUDE.md"
@@ -363,7 +391,7 @@ else
   # Every committed version of a dropped skill is in install.sh's table, and is removed when installed
   table=$(sed -n "/^DROPPED_SUMS='/,/'\$/p" "$PKG/install.sh" | sed "s/^DROPPED_SUMS='//; s/'\$//")
   H=$(newhome q20j); inst "$H" >/dev/null; versions=0; notin=""; kept=""
-  for n in critic scout smith; do
+  for n in check critic foreman scout smith; do
     for h in $(git -C "$PKG" log --all --format=%H -- "skills/$n/SKILL.md" 2>/dev/null); do
       git -C "$PKG" cat-file -e "$h:skills/$n/SKILL.md" 2>/dev/null || continue
       versions=$((versions + 1)); c=$(git -C "$PKG" show "$h:skills/$n/SKILL.md" | cksum | awk -v n="$n" '{print n, $1, $2}')

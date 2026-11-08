@@ -8,10 +8,15 @@ description: Write a failing test before the code that makes it pass, for new fe
 Every change to behavior starts with a test that fails for the right reason.
 
 ## Cycle
-1. **Red**: write one small test for the next piece of behavior. Run it and confirm it fails for the expected reason (a failed assertion), not a typo, import error or missing fixture.
+1. **Red**: write one small test for the next piece of behavior (when working outside-in, a failing higher-level test may stay red while unit cycles run under it). Run it and confirm it fails for the expected reason (a failed assertion), not a typo, import error or missing fixture.
 2. **Green**: write the minimum code that makes it pass. Run it, plus the tests around it.
 3. **Refactor**: clean up the code and the test while everything stays green. Run them again.
 4. Repeat until the behavior is complete, then run the full suite.
+
+## Levels
+- Unit tests cover logic, integration tests cover module and IO boundaries with real collaborators where cheap, and end-to-end tests cover user-visible flows.
+- Take the level from the plan's test strategy, or pick the lowest level that proves the behavior.
+- When the behavior spans layers, work outside-in: a failing higher-level test first, then unit tests.
 
 ## Rules
 - Use the project's existing test framework, layout and naming. Don't add a new framework or dependency without asking.
