@@ -29,9 +29,13 @@ HEADING='## Claude Code subagents'
 # Skills the package dropped. An installed copy is removed only when its
 # SKILL.md matches a version the package shipped (name, then the cksum CRC and size of every
 # committed version), so edits are never lost.
-# Regenerate the table with: for n in critic scout smith; do for h in $(git log --all --format=%H -- skills/$n/SKILL.md); do
+# Regenerate the table with: for n in check critic foreman scout smith; do for h in $(git log --all --format=%H -- skills/$n/SKILL.md); do
 #   git cat-file -e ${h}:skills/$n/SKILL.md 2>/dev/null && git show ${h}:skills/$n/SKILL.md | cksum | awk -v n=$n '{print n, $1, $2}'; done; done | LC_ALL=C sort -u
-DROPPED_SUMS='critic 809818994 614
+DROPPED_SUMS='check 3958520320 1393
+check 61924263 1189
+critic 809818994 614
+foreman 1035388686 8197
+foreman 3530980095 12643
 scout 4244998468 671
 smith 12583037 601
 smith 3982734297 619
@@ -321,7 +325,7 @@ done
 # superpowers overlaps with these skills
 for settings in "$HOME/.claude/settings.json" "$DEST/settings.json" "$DEST/settings.local.json"; do
   if grep -Eqs '"superpowers@[^"]*"[[:space:]]*:[[:space:]]*true' "$settings"; then
-    say warning "superpowers is enabled in $settings. Uninstall it with /plugin in Claude Code; its brainstorming and debugging skills overlap with foreman and inspect."
+    say warning "superpowers is enabled in $settings. Uninstall it with /plugin in Claude Code; its brainstorming and debugging skills overlap with scope and inspect."
     break
   fi
 done
