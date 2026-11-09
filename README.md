@@ -96,10 +96,9 @@ The script:
   - If CLAUDE.md needs a change but it or its folder isn't writable, it stops before changing anything, agents and skills included.
   - With `--project`, it uses `./CLAUDE.md`, or `./.claude/CLAUDE.md` if that's where the project keeps it.
 - Warns if another CLAUDE.md it can see (yours in `~/.claude`, or the current folder's) also has the section, or a heading of it without the end comment, since Claude Code loads all of them.
-- Removes the skills the package no longer ships (check, critic, foreman, scout and smith), but only when the installed folder is an unedited copy of what the package shipped. An edited copy, one with extra files or a symlink is left alone with a warning. `--dry-run` shows what would be removed.
 - Warns if the superpowers plugin is still enabled in your settings. Uninstall it with `/plugin` in Claude Code; its brainstorming and debugging skills overlap with `scope` and `inspect`.
 
-Running it again is safe: unchanged files are reported as unchanged.
+Running it again is safe: unchanged files are reported as unchanged. The installer no longer removes skill folders from older versions of the package that aren't in `skills/` any more (for example an old `scout` skill, now an agent); delete them by hand.
 
 **If your old section lives in a project's CLAUDE.md**, run the script with `--project` from that project too, or delete the section there. Otherwise that project keeps its old routing.
 
@@ -147,7 +146,7 @@ Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-
 
 ## Tests
 
-`tests/regress.sh` runs `install.sh` through about 150 checks, including the OpenCode target (paths, the agent conversion, `--project`, `--dry-run` and an unconvertible agent): fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, that the installer removes unedited copies of the dropped skills and leaves edited ones alone, that `scope`, `spec` and `blueprint` are model-invocable, inline and name their next step, and that CLAUDE.md routes non-trivial work down that chain.
+`tests/regress.sh` runs `install.sh` through about 150 checks, including the OpenCode target (paths, the agent conversion, `--project`, `--dry-run` and an unconvertible agent): fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, that the installer leaves old skill folders alone, that `scope`, `spec` and `blueprint` are model-invocable, inline and name their next step, and that CLAUDE.md routes non-trivial work down that chain.
 
 ```bash
 bash tests/regress.sh
