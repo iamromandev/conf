@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Install the conf agents, skills and CLAUDE.md section.
 #
-# Usage: install.sh [--project] [--dry-run]
+# Usage: install.sh [--target claude|opencode] [--project] [--dry-run]
 #   (default)  install to ~/.claude for all projects; the section goes in ~/.claude/CLAUDE.md
+#   --target   claude (default) or opencode. opencode installs to ~/.config/opencode (agents converted to
+#              OpenCode's format, skills as they are) and puts the section in ~/.config/opencode/AGENTS.md;
+#              with --project, to ./.opencode/ and ./AGENTS.md. Models can be changed with the
+#              CONF_MODEL_HAIKU, CONF_MODEL_SONNET and CONF_MODEL_OPUS environment variables
 #   --project  install to .claude/ in the current folder, so run it from your project's folder.
 #              The section goes in ./CLAUDE.md, or ./.claude/CLAUDE.md if the project keeps it there
 #   --dry-run  show what would change, including a diff of CLAUDE.md, without touching anything
@@ -15,15 +19,25 @@ set -euo pipefail
 SRC="$(cd "$(dirname "$0")" && pwd)"
 PROJECT=0
 DRY_RUN=0
+TARGET=claude
 
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --project) PROJECT=1 ;;
     --dry-run) DRY_RUN=1 ;;
+    --target)
+      if [ $# -lt 2 ]; then echo "--target needs a value (use claude or opencode)" >&2; exit 1; fi
+      TARGET="$2"; shift ;;
+    --target=*) TARGET="${1#--target=}" ;;
     -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
-    *) echo "Unknown option: $arg (try --help)" >&2; exit 1 ;;
+    *) echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
   esac
+  shift
 done
+case "$TARGET" in
+  claude|opencode) ;;
+  *) echo "Unknown target: $TARGET (use claude or opencode)" >&2; exit 1 ;;
+esac
 
 HEADING='## Claude Code subagents'
 # Skills the package dropped. An installed copy is removed only when its
@@ -138,20 +152,103 @@ if [ "$PROJECT" = 1 ]; then
     echo "The current folder is your home folder. To install for all projects, run without --project." >&2
     exit 1
   fi
-  DEST="$PWD/.claude"
+  if [ "$TARGET" = opencode ]; then DEST="$PWD/.opencode"; else DEST="$PWD/.claude"; fi
   # Use whichever project CLAUDE.md already has the section, else whichever exists, else ./CLAUDE.md
   CLAUDE_MD="$PWD/CLAUDE.md"
-  if has_section "$DEST/CLAUDE.md" && ! has_section "$CLAUDE_MD"; then
+  if [ "$TARGET" = opencode ]; then
+    CLAUDE_MD="$PWD/AGENTS.md"
+  elif has_section "$DEST/CLAUDE.md" && ! has_section "$CLAUDE_MD"; then
     CLAUDE_MD="$DEST/CLAUDE.md"
   elif has_heading "$DEST/CLAUDE.md" && ! has_heading "$CLAUDE_MD"; then
     CLAUDE_MD="$DEST/CLAUDE.md"
   elif [ ! -f "$CLAUDE_MD" ] && [ -f "$DEST/CLAUDE.md" ]; then
     CLAUDE_MD="$DEST/CLAUDE.md"
   fi
+elif [ "$TARGET" = opencode ]; then
+  DEST="$HOME/.config/opencode"
+  CLAUDE_MD="$DEST/AGENTS.md"
 else
   DEST="$HOME/.claude"
   CLAUDE_MD="$DEST/CLAUDE.md"
 fi
+AGENTS_DEST="$DEST/agents"
+SKILLS_DEST="$DEST/skills"
+
+# OpenCode model names for the agents' haiku, sonnet and opus
+MODEL_HAIKU="${CONF_MODEL_HAIKU:-anthropic/claude-haiku-5-5}"
+MODEL_SONNET="${CONF_MODEL_SONNET:-anthropic/claude-sonnet-5-5}"
+MODEL_OPUS="${CONF_MODEL_OPUS:-anthropic/claude-opus-5-5}"
+
+# convert_agent <source> <output>: write a Claude Code agent file in OpenCode's format. The body is
+# kept; the frontmatter becomes description, mode: subagent, the mapped model, permissions made from
+# tools (write and edit allowed only when tools lists Edit or Write), and a hex color. name is dropped
+# (OpenCode uses the file name), and so are effort (OpenCode's variants for each model can't be
+# checked offline) and skills (a line in the body tells the agent to load them instead). An unknown
+# frontmatter key, model or color is an error, so a half-converted file is never written.
+convert_agent() {
+  LC_ALL=C awk -v haiku="$MODEL_HAIKU" -v sonnet="$MODEL_SONNET" -v opus="$MODEL_OPUS" -v file="$1" '
+    function die(m) { printf "error: %s: %s\n", file, m > "/dev/stderr"; failed = 1; exit 1 }
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    function has(list, word,   n, a, i) {
+      n = split(list, a, /[ \t]*,[ \t]*/)
+      for (i = 1; i <= n; i++) if (a[i] == word) return 1
+      return 0
+    }
+    BEGIN { sq = "\047"; split("name description tools model effort skills color", k, " "); for (i in k) known[k[i]] = 1 }
+    { sub(/\r$/, "") }
+    NR == 1 { if ($0 != "---") die("no frontmatter"); infm = 1; next }
+    infm && $0 == "---" { infm = 0; done = 1; next }
+    infm {
+      if ($0 ~ /^[A-Za-z][A-Za-z0-9_-]*:/) {
+        cur = $0; sub(/:.*/, "", cur)
+        if (!(cur in known)) die("unknown frontmatter key \"" cur "\"")
+        v = $0; sub(/^[^:]*:/, "", v); val[cur] = trim(v)
+      } else if ($0 ~ /^[ \t]+[^ \t]/ && cur != "") {
+        v = trim($0); if (cur == "skills") { sub(/^-[ \t]*/, "", v); val[cur] = val[cur] (val[cur] == "" ? "" : ",") v } else val[cur] = val[cur] " " v
+      } else if ($0 !~ /^[ \t]*$/) die("cannot read frontmatter line: " $0)
+      next
+    }
+    done { body[++nb] = $0 }
+    END {
+      if (failed) exit 1
+      if (!done) die("frontmatter is not closed")
+      if (val["description"] == "") die("no description")
+      d = val["description"]
+      if (d ~ /^[>|\[{"]/) die("unsupported description form")
+      if (substr(d, 1, 1) == sq) {
+        if (length(d) < 2 || substr(d, length(d), 1) != sq) die("unsupported description form")
+        d = substr(d, 2, length(d) - 2); gsub(sq sq, sq, d)
+      }
+      m = val["model"]
+      if (m == "") die("missing model")
+      if (m == "haiku") m = haiku; else if (m == "sonnet") m = sonnet; else if (m == "opus") m = opus
+      else die("unknown model \"" m "\" (use haiku, sonnet or opus)")
+      c = val["color"]
+      if (c == "") die("missing color")
+      if (c == "cyan") c = "#00bcd4"; else if (c == "orange") c = "#ff9800"; else if (c == "green") c = "#4caf50"
+      else die("unknown color \"" c "\"")
+      gsub(/\\/, "\\\\", d); gsub(/"/, "\\\"", d)
+      effect = (has(val["tools"], "Edit") || has(val["tools"], "Write")) ? "allow" : "deny"
+      print "---"
+      print "description: \"" d "\""
+      print "mode: subagent"
+      print "model: " m
+      print "permissions:"
+      split("write edit", acts, " ")
+      for (i = 1; i <= 2; i++) { print "  - action: " acts[i]; print "    resource: \"*\""; print "    effect: " effect }
+      print "color: \"" c "\""
+      print "---"
+      for (i = 1; i <= nb; i++) print body[i]
+      ns = split(val["skills"], sk, /[ \t]*,[ \t]*/)
+      for (i = 1; i <= ns; i++) {
+        if (sk[i] == "") continue
+        print ""
+        if (sk[i] == "tdd") print "Before writing code, load the `tdd` skill and follow it."
+        else print "Load the `" sk[i] "` skill and follow it."
+      }
+    }
+  ' "$1" > "$2"
+}
 
 run() {
   if [ "$DRY_RUN" = 0 ]; then "$@"; fi
@@ -194,8 +291,14 @@ show_diff() {
 }
 
 if [ "$DRY_RUN" = 1 ]; then echo "Dry run: nothing will change."; fi
-echo "Agents and skills: $DEST"
-echo "CLAUDE.md section: $CLAUDE_MD"
+if [ "$TARGET" = opencode ]; then
+  echo "Target: opencode"
+  echo "Agents and skills: $DEST"
+  echo "AGENTS.md section: $CLAUDE_MD"
+else
+  echo "Agents and skills: $DEST"
+  echo "CLAUDE.md section: $CLAUDE_MD"
+fi
 echo
 
 # CLAUDE.md: work out the new file first, so a problem with it stops the whole install before
@@ -248,12 +351,22 @@ if [ "$verb" != unchanged ] && { { [ -f "$CLAUDE_MD" ] && [ ! -w "$CLAUDE_MD" ];
 fi
 
 # Agents
+# For opencode, convert every agent first, so an agent that can't be converted stops the install
+# before anything is written.
+if [ "$TARGET" = opencode ]; then
+  converted="$(mktemp -d "$tmpdir/conf.XXXXXX")"
+  trap 'rm -rf "$tmp" "$section" "$converted"' EXIT
+  for f in "$SRC"/agents/*.md; do
+    if ! convert_agent "$f" "$converted/$(basename "$f")"; then echo "Couldn't convert $f. Nothing was changed." >&2; exit 1; fi
+  done
+fi
 for f in "$SRC"/agents/*.md; do
   rel="agents/$(basename "$f")"
-  target="$DEST/$rel"
+  target="$AGENTS_DEST/$(basename "$f")"
+  if [ "$TARGET" = opencode ]; then f="$converted/$(basename "$f")"; fi
   if [ -f "$target" ] && cmp -s "$f" "$target"; then say unchanged "$rel"; continue; fi
   clear_target "$target"
-  run mkdir -p "$DEST/agents"
+  run mkdir -p "$AGENTS_DEST"
   run cp "$f" "$target"
   say "$copied" "$rel"
 done
@@ -261,10 +374,10 @@ done
 # Skills
 for d in "$SRC"/skills/*/; do
   rel="skills/$(basename "$d")"
-  target="$DEST/$rel"
+  target="$SKILLS_DEST/$(basename "$d")"
   if [ -d "$target" ] && diff -rq "$d" "$target" >/dev/null 2>&1; then say unchanged "$rel"; continue; fi
   clear_target "$target"
-  run mkdir -p "$DEST/skills"
+  run mkdir -p "$SKILLS_DEST"
   run cp -R "${d%/}" "$target"
   say "$copied" "$rel"
 done
@@ -273,7 +386,7 @@ done
 # just SKILL.md (a .DS_Store file is ignored), and that file is a version the package shipped. Anything else is left
 # alone, and so is a name the package ships again.
 for n in $DROPPED_SKILLS; do
-  target="$DEST/skills/$n"
+  target="$SKILLS_DEST/$n"
   if [ -d "$SRC/skills/$n" ]; then continue; fi
   if [ ! -e "$target" ] && [ ! -L "$target" ]; then continue; fi
   if [ -d "$target" ] && [ ! -L "$target" ] && [ "$(ls -A "$target" | grep -vxF .DS_Store)" = "SKILL.md" ] \
@@ -309,21 +422,35 @@ if md_plan "$tmp"; then
   done
 fi
 
-# Other CLAUDE.md files with the section: Claude Code loads all of them
+# Other CLAUDE.md files with the section: Claude Code loads all of them. OpenCode reads CLAUDE.md
+# only when there is no AGENTS.md in the same scope (global or project), so for opencode a file is
+# skipped when its scope's AGENTS.md exists, counting the one this run writes.
 for other in "$HOME/.claude/CLAUDE.md" "$PWD/CLAUDE.md" "$PWD/.claude/CLAUDE.md"; do
   [ -f "$other" ] || continue
+  if [ "$TARGET" = opencode ]; then
+    # OpenCode's CLAUDE.md fallback reads ~/.claude/CLAUDE.md and the project's ./CLAUDE.md only
+    if [ "$other" = "$PWD/.claude/CLAUDE.md" ]; then continue; fi
+    if [ "$other" = "$HOME/.claude/CLAUDE.md" ]; then scope_agents="$HOME/.config/opencode/AGENTS.md"; else scope_agents="$PWD/AGENTS.md"; fi
+    if [ -f "$scope_agents" ] || [ "$scope_agents" = "$CLAUDE_MD" ]; then continue; fi
+  fi
   if [ "$other" -ef "$CLAUDE_MD" ] || [ "$other" -ef "$SECTION" ]; then continue; fi
   md_plan "$other" || continue
   if [ -n "$PLAN_FIRST" ]; then
-    if [ "$other" -ef "$HOME/.claude/CLAUDE.md" ]; then hint="install.sh without --project"; else hint="install.sh --project from that folder"; fi
-    say warning "$other also has the \"Claude Code subagents\" section, and Claude Code loads both. Remove one, or run $hint to update it."
+    if [ "$TARGET" = opencode ]; then
+      say warning "$other also has the \"Claude Code subagents\" section, and OpenCode loads both because that scope has no AGENTS.md. Remove the section from that file, or install the OpenCode rules for that scope too (the section then also appears in the other scope's AGENTS.md)."
+    else
+      if [ "$other" -ef "$HOME/.claude/CLAUDE.md" ]; then hint="install.sh without --project"; else hint="install.sh --project from that folder"; fi
+      say warning "$other also has the \"Claude Code subagents\" section, and Claude Code loads both. Remove one, or run $hint to update it."
+    fi
   elif [ -n "$PLAN_OTHERS" ]; then
-    say warning "$other has a \"Claude Code subagents\" heading too, with no end-of-section comment after it, and Claude Code loads that file as well. If it's an old copy, delete it."
+    if [ "$TARGET" = opencode ]; then who=OpenCode; else who="Claude Code"; fi
+    say warning "$other has a \"Claude Code subagents\" heading too, with no end-of-section comment after it, and $who loads that file as well. If it's an old copy, delete it."
   fi
 done
 
 # superpowers overlaps with these skills
 for settings in "$HOME/.claude/settings.json" "$DEST/settings.json" "$DEST/settings.local.json"; do
+  [ "$TARGET" = opencode ] && break
   if grep -Eqs '"superpowers@[^"]*"[[:space:]]*:[[:space:]]*true' "$settings"; then
     say warning "superpowers is enabled in $settings. Uninstall it with /plugin in Claude Code; its brainstorming and debugging skills overlap with scope and inspect."
     break
@@ -334,5 +461,5 @@ echo
 if [ "$DRY_RUN" = 1 ]; then
   echo "Dry run finished. Run again without --dry-run to apply."
 else
-  echo "Done. Start a new Claude Code session to load the changes."
+  if [ "$TARGET" = opencode ]; then echo "Done. Start a new OpenCode session to load the changes."; else echo "Done. Start a new Claude Code session to load the changes."; fi
 fi

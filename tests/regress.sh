@@ -230,10 +230,10 @@ for s in '<short-kebab-name>' 'Closes #<issue>' 'squash if more'; do grep -q -- 
 for s in "run the project's tests" '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -qi -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
 [ -z "$missing" ] && ok "Q8 the git rules (branch, commit, PR, merge, cleanup, issue update) are in the ship skill, and CLAUDE.md only says to use it when asked" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
-a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: high' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: low' "$a/scout.md" \
-  && grep -qx 'model: sonnet' "$a/smith.md" && grep -qx 'effort: medium' "$a/smith.md" \
-  && grep -q '^| `critic` | sonnet | high |' "$PKG/README.md" && grep -q '^| `scout` | haiku | low |' "$PKG/README.md" && grep -q '^| `smith` | sonnet | medium |' "$PKG/README.md" \
-  && ok "Q10 critic is sonnet/high, scout haiku/low and smith sonnet/medium, in the agents and README" || bad Q10 "model or effort differs"
+a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: medium' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: low' "$a/scout.md" \
+  && grep -qx 'model: sonnet' "$a/smith.md" && grep -qx 'effort: low' "$a/smith.md" \
+  && grep -q '^| `critic` | sonnet | medium |' "$PKG/README.md" && grep -q '^| `scout` | haiku | low |' "$PKG/README.md" && grep -q '^| `smith` | sonnet | low |' "$PKG/README.md" \
+  && ok "Q10 critic is sonnet/medium, scout haiku/low and smith sonnet/low, in the agents and README" || bad Q10 "model or effort differs"
 # (bracketed so this line doesn't match itself)
 legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf|[r]eviewer|[e]xplorer|`[b]uild`'
 hits=$(cd "$PKG" && grep -nE "$legacy|[b]uild (report|skill)" README.md install.sh tests/regress.sh CLAUDE.md skills/*/SKILL.md)
@@ -409,6 +409,110 @@ else
   fi
 fi
 
+echo "== OpenCode target"
+# ohome <name>: an empty HOME (no .claude)
+ohome() { local h="$T/$1"; rm -rf "$h"; mkdir -p "$h"; printf '%s' "$h"; }
+OC=".config/opencode"
+# run from an empty folder, so the package's own CLAUDE.md in the cwd isn't picked up
+OCWD="$T/oc-cwd"; rm -rf "$OCWD"; mkdir -p "$OCWD"; cd "$OCWD" || exit 1
+H=$(ohome oc0); a=$(treesum "$H"); out=$(inst "$H" "" --target bogus); rc=$?
+[ $rc = 1 ] && [ "$a" = "$(treesum "$H")" ] && printf '%s' "$out" | grep -q 'Unknown target: bogus (use claude or opencode)' && ok "OC1 --target bogus exits 1, says so and writes nothing" || bad OC1 "rc=$rc output: $out"
+H=$(ohome oc1); out=$(inst "$H" "" --target opencode); rc=$?
+[ $rc = 0 ] && [ "$(ls "$H/$OC/agents" | tr '\n' ' ')" = "critic.md scout.md smith.md " ] && [ "$(ls "$H/$OC/skills" | wc -l | tr -d ' ')" = 6 ] && [ ! -e "$H/.claude" ] && ok "OC2 --target opencode installs 3 agents and 6 skills under ~/.config/opencode, and nothing in ~/.claude" || bad OC2 "rc=$rc: $(find "$H" -maxdepth 3 | head -20 | tr '\n' ' ')"
+same "OC2 the rules section is AGENTS.md" "$H/$OC/AGENTS.md" "$SEC"
+printf '%s\n' "$out" | grep -qi 'warning' && bad OC2 "unexpected warning: $(printf '%s' "$out" | grep -i -m1 warning)" || ok "OC2 no warning on a clean install"
+P="$T/oc-proj"; rm -rf "$P"; mkdir -p "$P"; H=$(ohome oc2); out=$(cd "$P" && inst "$H" "" --target opencode --project); rc=$?
+[ $rc = 0 ] && [ "$(ls "$P/.opencode/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$P/.opencode/skills" | wc -l | tr -d ' ')" = 6 ] && [ ! -e "$P/.claude" ] && [ ! -e "$H/.config" ] && ok "OC2 --project installs under ./.opencode, and nothing in HOME or ./.claude" || bad OC2 "rc=$rc: $(find "$P" -maxdepth 2 | head -12 | tr '\n' ' ')"
+same "OC2 --project puts the section in ./AGENTS.md" "$P/AGENTS.md" "$SEC"
+# the converted agents
+H=$(ohome oc3); inst "$H" "" --target opencode >/dev/null; A="$H/$OC/agents"
+for n in scout critic smith; do
+  f="$A/$n.md"; miss=""
+  grep -qx 'mode: subagent' "$f" || miss="$miss [mode]"
+  grep -q '^description: "' "$f" || miss="$miss [description]"
+  if grep -qE '^(effort|skills|tools|name):' "$f"; then miss="$miss [source-only key left]"; fi
+  grep -qE '^color: "#[0-9a-f]{6}"$' "$f" || miss="$miss [color]"
+  [ "$(grep -c '^  - action: ' "$f")" = 2 ] || miss="$miss [rule count]"
+  [ -z "$miss" ] && ok "OC3 converted $n has mode, description, hex color and two permission rules, and no Claude-only keys" || bad "OC3 $n" "$miss"
+done
+grep -qx 'model: anthropic/claude-haiku-5-5' "$A/scout.md" && grep -qx 'model: anthropic/claude-sonnet-5-5' "$A/critic.md" && grep -qx 'model: anthropic/claude-sonnet-5-5' "$A/smith.md" && ok "OC3 models map to anthropic/claude-*-5-5" || bad OC3 "models: $(grep -h '^model:' "$A"/*.md | tr '\n' ' ')"
+# perm <file> <action>: the effect of that action's rule
+perm() { awk -v a="$2" '$0 == "  - action: " a { getline; getline; print $2 }' "$1"; }
+[ "$(perm "$A/scout.md" write)$(perm "$A/scout.md" edit)$(perm "$A/critic.md" write)$(perm "$A/critic.md" edit)" = denydenydenydeny ] && ok "OC3 scout and critic deny write and edit" || bad OC3 "scout/critic permissions"
+[ "$(perm "$A/smith.md" write)$(perm "$A/smith.md" edit)" = allowallow ] && ok "OC3 smith allows write and edit" || bad OC3 "smith permissions"
+[ "$(grep -l 'load the `tdd` skill' "$A"/*.md | xargs -n1 basename)" = smith.md ] && tail -1 "$A/smith.md" | grep -qx 'Before writing code, load the `tdd` skill and follow it.' && ok "OC3 only smith's body tells it to load tdd, as its last line" || bad OC3 "tdd line"
+# scout and critic have no skills, so their body after the frontmatter is the source's
+miss=""
+for n in scout critic; do
+  [ "$(sed '1,/^---$/d' "$PKG/agents/$n.md")" = "$(sed '1,/^---$/d' "$A/$n.md")" ] || miss="$miss $n"
+done
+[ -z "$miss" ] && ok "OC3 scout and critic bodies are unchanged" || bad OC3 "body differs:$miss"
+H=$(ohome oc3b); CONF_MODEL_HAIKU=acme/fast HOME="$H" TMPDIR="$T/tmp" bash "$PKG/install.sh" --target opencode >/dev/null 2>&1
+grep -qx 'model: acme/fast' "$H/$OC/agents/scout.md" && grep -qx 'model: anthropic/claude-sonnet-5-5' "$H/$OC/agents/critic.md" && ok "OC3 CONF_MODEL_HAIKU changes only the haiku agent's model" || bad OC3 "override: $(grep -h '^model:' "$H/$OC/agents"/*.md | tr '\n' ' ')"
+# skills, rules and re-runs
+H=$(ohome oc4); inst "$H" "" --target opencode >/dev/null; miss=""
+for d in "$PKG"/skills/*/; do diff -rq "$d" "$H/$OC/skills/$(basename "$d")" >/dev/null || miss="$miss $(basename "$d")"; done
+[ -z "$miss" ] && ok "OC4 every installed skill folder matches the source" || bad OC4 "differ:$miss"
+# the installed tree has no Claude-only tool name outside the "when it's available" wording
+h=$(grep -rh 'AskUserQuestion' "$H/$OC" | grep -v "AskUserQuestion when it's available" | head -1)
+[ -z "$h" ] && ok "OC4 AskUserQuestion appears in the opencode install only as 'when it's available'" || bad OC4 "$h"
+out=$(inst "$H" "" --target opencode); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && [ "$(printf '%s\n' "$out" | grep -cE '^(installed|replaced|updated|appended|created|removed|warning)')" = 0 ] && ok "OC6 a second run reports 10 unchanged and nothing else" || bad OC6 "rerun: $(printf '%s' "$out" | grep -vE '^(unchanged|Target|Agents|AGENTS|$|Done)' | head -3)"
+H=$(ohome oc5); a=$(treesum "$H"); out=$(inst "$H" "" --target opencode --dry-run)
+[ "$a" = "$(treesum "$H")" ] && printf '%s\n' "$out" | grep -q '^would install  *agents/scout.md$' && printf '%s\n' "$out" | grep -q '^would create ' && ok "OC5 --dry-run writes nothing and says what it would install" || bad OC5 "dry run: $(printf '%s' "$out" | head -8 | tr '\n' '|')"
+H=$(ohome oc5b); mkdir -p "$H/$OC"; printf '# Mine\n' > "$H/$OC/AGENTS.md"; out=$(inst "$H" "" --target opencode --dry-run)
+printf '%s\n' "$out" | grep -q '^would append ' && printf '%s\n' "$out" | grep -q '^    +## Claude Code subagents$' && ok "OC5 --dry-run shows an AGENTS.md diff" || bad OC5 "no diff: $(printf '%s' "$out" | grep -m2 'append\|+##')"
+H=$(ohome oc7); mkdir -p "$H/$OC"; printf 'before\n\n%s\n\nafter\n' "$OLD" > "$H/$OC/AGENTS.md"; inst "$H" "" --target opencode >/dev/null
+same "OC7 an AGENTS.md section is replaced and the user's lines before and after it are kept" "$H/$OC/AGENTS.md" "$(printf 'before\n\n%s\n\nafter' "$SEC")"
+H=$(ohome oc7b); mkdir -p "$H/.claude"; printf '%s\n' "$SEC" > "$H/.claude/CLAUDE.md"; printf '{"enabledPlugins":{"superpowers@x":true}}\n' > "$H/.claude/settings.json"
+out=$(inst "$H" "" --target opencode); if printf '%s\n' "$out" | grep -qi 'warning'; then bad OC7 "a Claude-only warning: $(printf '%s' "$out" | grep -i -m1 warning)"; else ok "OC7 no Claude CLAUDE.md or superpowers warnings for opencode"; fi
+if [ -n "$old" ]; then
+  H=$(ohome oc8); inst "$H" "" --target opencode >/dev/null; mkdir -p "$H/$OC/skills/scout"; git -C "$PKG" show "$old:skills/scout/SKILL.md" > "$H/$OC/skills/scout/SKILL.md"
+  out=$(inst "$H" "" --target opencode); [ ! -e "$H/$OC/skills/scout" ] && printf '%s\n' "$out" | grep -q '^removed .*skills/scout' && ok "OC8 an unedited dropped skill is removed from the opencode skills folder" || bad OC8 "scout kept: $(printf '%s' "$out" | grep -m1 scout)"
+else
+  echo "skip OC8 dropped skill in the opencode folder (needs git and the package's history)"
+fi
+# an agent that can't be converted stops the install before anything is written
+rm -rf "$T/pkg-badkey"; cp -R "$PKG" "$T/pkg-badkey"
+awk '{ print } /^color: / { print "bogus: 1" }' "$PKG/agents/critic.md" > "$T/pkg-badkey/agents/critic.md"
+H=$(ohome oc9); a=$(treesum "$H"); out=$(inst "$H" "$T/pkg-badkey" --target opencode); rc=$?
+[ $rc = 1 ] && [ "$a" = "$(treesum "$H")" ] && printf '%s' "$out" | grep -q 'unknown frontmatter key "bogus"' && printf '%s' "$out" | grep -q 'Nothing was changed' && ok "OC9 an unknown agent frontmatter key is refused, nothing written" || bad OC9 "rc=$rc: $out"
+# CLAUDE.md fallback: OpenCode reads CLAUDE.md in a scope only when that scope has no AGENTS.md
+P="$T/oc-fb"; rm -rf "$P"; mkdir -p "$P"; printf '%s\n' "$SEC" > "$P/CLAUDE.md"; H=$(ohome oc10)
+out=$(cd "$P" && inst "$H" "" --target opencode)
+printf '%s\n' "$out" | grep -q "^warning .*/oc-fb/CLAUDE.md also has the .*OpenCode loads both" && ok "OC13 a global install warns about ./CLAUDE.md with the section and no ./AGENTS.md" || bad OC13 "no warning: $(printf '%s' "$out" | grep -i warning)"
+printf '# Mine\n' > "$P/AGENTS.md"; H=$(ohome oc10b); out=$(cd "$P" && inst "$H" "" --target opencode)
+printf '%s\n' "$out" | grep -qi 'warning' && bad OC13 "warned though ./AGENTS.md exists: $(printf '%s' "$out" | grep -i warning)" || ok "OC13 no warning when ./AGENTS.md exists in the same scope"
+P="$T/oc-fb2"; rm -rf "$P"; mkdir -p "$P"; H=$(ohome oc10c); mkdir -p "$H/.claude"; printf '%s\n' "$SEC" > "$H/.claude/CLAUDE.md"
+out=$(cd "$P" && inst "$H" "" --target opencode --project)
+printf '%s\n' "$out" | grep -q "^warning .*/oc10c/.claude/CLAUDE.md also has the .*OpenCode loads both" && ok "OC13 --project warns about ~/.claude/CLAUDE.md with the section and no global AGENTS.md" || bad OC13 "no warning: $(printf '%s' "$out" | grep -i warning)"
+H=$(ohome oc10d); mkdir -p "$H/.claude" "$H/$OC"; printf '%s\n' "$SEC" > "$H/.claude/CLAUDE.md"; printf '# Mine\n' > "$H/$OC/AGENTS.md"
+out=$(cd "$P" && inst "$H" "" --target opencode --project)
+printf '%s\n' "$out" | grep -qi 'warning' && bad OC13 "warned though the global AGENTS.md exists: $(printf '%s' "$out" | grep -i warning)" || ok "OC13 --project: no warning when the global AGENTS.md exists"
+# the warning doesn't suggest a command that wouldn't update the file, and ./.claude/CLAUDE.md isn't a fallback
+P="$T/oc-fb3"; rm -rf "$P"; mkdir -p "$P/.claude"; printf '%s\n' "$SEC" > "$P/.claude/CLAUDE.md"; H=$(ohome oc10e)
+out=$(cd "$P" && inst "$H" "" --target opencode)
+printf '%s\n' "$out" | grep -qi 'warning' && bad OC13 "warned about ./.claude/CLAUDE.md, which OpenCode doesn't read: $(printf '%s' "$out" | grep -i warning)" || ok "OC13 ./.claude/CLAUDE.md is not treated as an OpenCode fallback"
+out=$(cd "$T/oc-fb" 2>/dev/null && rm -f AGENTS.md && inst "$(ohome oc10f)" "" --target opencode)
+printf '%s\n' "$out" | grep -q 'OpenCode loads both' && ! printf '%s\n' "$out" | grep -q 'to update it' && ok "OC13 the opencode warning doesn't say 'run ... to update it'" || bad OC13 "wording: $(printf '%s' "$out" | grep -i warning)"
+# agent description forms
+badpkg() { rm -rf "$T/pkg-$1"; cp -R "$PKG" "$T/pkg-$1"; }
+badpkg sq; awk '/^description:/ { print "description: '"'"'It'"''"'s a test: ok'"'"'"; next } { print }' "$PKG/agents/critic.md" > "$T/pkg-sq/agents/critic.md"
+H=$(ohome oc11); out=$(inst "$H" "$T/pkg-sq" --target opencode); rc=$?
+[ $rc = 0 ] && grep -qxF 'description: "It'"'"'s a test: ok"' "$H/$OC/agents/critic.md" && ok "OC14 a single-quoted description is unquoted and '' becomes '" || bad OC14 "rc=$rc: $(grep -m1 '^description' "$H/$OC/agents/critic.md")"
+for form in '>' '|' '"x"' '[a]'; do
+  badpkg df; awk -v f="$form" '/^description:/ { print "description: " f; next } { print }' "$PKG/agents/critic.md" > "$T/pkg-df/agents/critic.md"
+  H=$(ohome oc12); a=$(treesum "$H"); out=$(inst "$H" "$T/pkg-df" --target opencode); rc=$?
+  [ $rc = 1 ] && [ "$a" = "$(treesum "$H")" ] && printf '%s' "$out" | grep -q 'unsupported description form' && printf '%s' "$out" | grep -q 'Nothing was changed' && ok "OC14 description starting with $form is refused, nothing written" || bad "OC14 $form" "rc=$rc: $out"
+done
+for key in model color; do
+  badpkg mk; awk -v k="$key" '$0 ~ "^" k ":" { next } { print }' "$PKG/agents/critic.md" > "$T/pkg-mk/agents/critic.md"
+  H=$(ohome oc13); out=$(inst "$H" "$T/pkg-mk" --target opencode); rc=$?
+  [ $rc = 1 ] && printf '%s' "$out" | grep -q "missing $key" && ok "OC14 an agent with no $key says 'missing $key'" || bad "OC14 $key" "rc=$rc: $out"
+done
+grep -q -- '--target opencode' "$PKG/README.md" && grep -q '^### OpenCode$' "$PKG/README.md" && ok "OC12 the README documents the OpenCode target" || bad OC12 "README has no OpenCode section"
+[ ! -e "$PKG/opencode" ] && ok "OC11 the package keeps one copy of each agent (no opencode/ folder)" || bad OC11 "opencode/ exists"
+
+cd "$PKG" || exit 1
 echo
 echo "passed $PASS, failed $FAIL"
 if [ "$FAIL" = 0 ] && [ -z "${KEEP:-}" ]; then rm -rf "$T"; else echo "Test files kept in $T"; fi

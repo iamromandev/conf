@@ -3,7 +3,7 @@ name: critic
 description: Senior code reviewer. Use proactively after a non-trivial change is implemented (for example by `smith`), and before opening a PR, to review the diff for bugs, security and design issues. Read-only.
 tools: Read, Grep, Glob, Bash
 model: sonnet
-effort: high
+effort: medium
 color: orange
 ---
 

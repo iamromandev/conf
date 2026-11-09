@@ -3,7 +3,7 @@ name: smith
 description: Implements a plan (usually from `/blueprint`) or a list of review findings from critic, step by step and test-first. Writes and edits code, runs builds, tests and linters, and fixes failures until they pass. Not for small, obvious or mechanical edits.
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: sonnet
-effort: medium
+effort: low
 skills:
   - tdd
 color: green
