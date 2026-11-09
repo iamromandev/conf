@@ -103,9 +103,37 @@ Running it again is safe: unchanged files are reported as unchanged.
 
 **If your old section lives in a project's CLAUDE.md**, run the script with `--project` from that project too, or delete the section there. Otherwise that project keeps its old routing.
 
+### OpenCode
+
+To use the same agents, skills and rules in [OpenCode](https://opencode.ai), add `--target opencode` (the default is `--target claude`). It works with `--dry-run` and `--project` too:
+
+```bash
+~/conf/install.sh --target opencode --dry-run
+~/conf/install.sh --target opencode
+```
+
+| Piece | Global | With `--project` |
+|---|---|---|
+| Agents | `~/.config/opencode/agents/` | `./.opencode/agents/` |
+| Skills | `~/.config/opencode/skills/` | `./.opencode/skills/` |
+| Rules section | `~/.config/opencode/AGENTS.md` | `./AGENTS.md` |
+
+The rules section is replaced or appended in `AGENTS.md` the same way as in CLAUDE.md. OpenCode reads `CLAUDE.md` only when there's no `AGENTS.md` in the same scope (`~/.claude/CLAUDE.md` against `~/.config/opencode/AGENTS.md`, `./CLAUDE.md` against `./AGENTS.md`), so the section isn't loaded twice within a scope. If it's also in a `CLAUDE.md` whose scope has no `AGENTS.md` (for example `./CLAUDE.md` after a global install), the installer warns, because OpenCode would load both. Skills are copied as they are.
+
+Agents are converted as they're copied, so `agents/` stays the only source:
+- `mode: subagent` is added, `name`, `effort` and `skills` are dropped, and `color` becomes a hex value.
+- `model` becomes an Anthropic ID: `anthropic/claude-haiku-5-5`, `anthropic/claude-sonnet-5-5` or `anthropic/claude-opus-5-5`. Set `CONF_MODEL_HAIKU`, `CONF_MODEL_SONNET` or `CONF_MODEL_OPUS` to use another provider or model.
+- `tools` becomes `permissions` rules: `scout` and `critic` deny `write` and `edit`, and `smith` allows them.
+- `smith` has no `skills:` field in OpenCode, so its body gets a last line telling it to load the `tdd` skill.
+- An agent with a frontmatter key the converter doesn't know stops the install before anything is written.
+
+Checked with OpenCode v2.2.6 through `opencode debug agents`: the converted agents load with the right models, colors and deny rules. Not checked: a live run (it needs a provider login), whether `edit` as well as `write` is enforced, the `effort` setting (OpenCode has no matching field here, so it's dropped), and invoking a skill from OpenCode.
+
+To undo an OpenCode install, delete the installed agents and skills and the section in `AGENTS.md` (it ends at the same end-of-section comment).
+
 ### Editing the files
 
-If you change an agent's or skill's `description`, keep it plain, unquoted text that starts with a letter. Avoid ` #`: YAML reads it as the start of a comment, so the rest of the description is silently dropped. Avoid a colon followed by a space (e.g. "step by step: write…") or at the end, too, which isn't valid YAML. If you need either, wrap the description in single quotes and double any apostrophe inside (`it''s`). Don't wrap it in double quotes: `scout`'s description contains double quotes, so the frontmatter would stop parsing. Claude Code then skips the agent, or loads the skill without a description.
+If you change an agent's or skill's `description`, keep it plain, unquoted text that starts with a letter. Avoid ` #`: YAML reads it as the start of a comment, so the rest of the description is silently dropped. Avoid a colon followed by a space (e.g. "step by step: write…") or at the end, too, which isn't valid YAML. If you need either, wrap the description in single quotes and double any apostrophe inside (`it''s`). Don't wrap it in double quotes (the OpenCode install refuses that, and `>`, `|`, `[` and `{` forms, with "unsupported description form"): `scout`'s description contains double quotes, so the frontmatter would stop parsing. Claude Code then skips the agent, or loads the skill without a description.
 
 `CLAUDE.md` must start with the `## Claude Code subagents` heading, end with the end-of-section comment, and have no other headings or end-of-section comments; the installer stops if it doesn't. Reword, add or remove lines freely: installs get the new wording on their next run, since the whole section is replaced. Leave the heading and the end-of-section comment as they are (`HEADING` and `END_MARK` in `install.sh`): the installer finds installed sections by them.
 
@@ -119,7 +147,7 @@ Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-
 
 ## Tests
 
-`tests/regress.sh` runs `install.sh` through about 100 checks: fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, that the installer removes unedited copies of the dropped skills and leaves edited ones alone, that `scope`, `spec` and `blueprint` are model-invocable, inline and name their next step, and that CLAUDE.md routes non-trivial work down that chain.
+`tests/regress.sh` runs `install.sh` through about 150 checks, including the OpenCode target (paths, the agent conversion, `--project`, `--dry-run` and an unconvertible agent): fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, that the installer removes unedited copies of the dropped skills and leaves edited ones alone, that `scope`, `spec` and `blueprint` are model-invocable, inline and name their next step, and that CLAUDE.md routes non-trivial work down that chain.
 
 ```bash
 bash tests/regress.sh
