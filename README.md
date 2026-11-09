@@ -9,8 +9,8 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 | Agent | Model | Effort | Tools | Use it for |
 |---|---|---|---|---|
 | `scout` | haiku | low | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
-| `critic` | sonnet | high | read-only | Reviewing a non-trivial change for bugs, security and design issues |
-| `smith` | sonnet | medium | edits code | Carrying out a plan or review findings test-first; preloads the `tdd` skill |
+| `critic` | sonnet | medium | read-only | Reviewing a non-trivial change for bugs, security and design issues |
+| `smith` | sonnet | low | edits code | Carrying out a plan or review findings test-first; preloads the `tdd` skill |
 
 "Read-only" for agents with Bash is an instruction in the prompt, not enforced by permissions.
 

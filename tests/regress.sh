@@ -230,10 +230,10 @@ for s in '<short-kebab-name>' 'Closes #<issue>' 'squash if more'; do grep -q -- 
 for s in "run the project's tests" '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -qi -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
 [ -z "$missing" ] && ok "Q8 the git rules (branch, commit, PR, merge, cleanup, issue update) are in the ship skill, and CLAUDE.md only says to use it when asked" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
-a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: high' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: low' "$a/scout.md" \
-  && grep -qx 'model: sonnet' "$a/smith.md" && grep -qx 'effort: medium' "$a/smith.md" \
-  && grep -q '^| `critic` | sonnet | high |' "$PKG/README.md" && grep -q '^| `scout` | haiku | low |' "$PKG/README.md" && grep -q '^| `smith` | sonnet | medium |' "$PKG/README.md" \
-  && ok "Q10 critic is sonnet/high, scout haiku/low and smith sonnet/medium, in the agents and README" || bad Q10 "model or effort differs"
+a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: medium' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: low' "$a/scout.md" \
+  && grep -qx 'model: sonnet' "$a/smith.md" && grep -qx 'effort: low' "$a/smith.md" \
+  && grep -q '^| `critic` | sonnet | medium |' "$PKG/README.md" && grep -q '^| `scout` | haiku | low |' "$PKG/README.md" && grep -q '^| `smith` | sonnet | low |' "$PKG/README.md" \
+  && ok "Q10 critic is sonnet/medium, scout haiku/low and smith sonnet/low, in the agents and README" || bad Q10 "model or effort differs"
 # (bracketed so this line doesn't match itself)
 legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf|[r]eviewer|[e]xplorer|`[b]uild`'
 hits=$(cd "$PKG" && grep -nE "$legacy|[b]uild (report|skill)" README.md install.sh tests/regress.sh CLAUDE.md skills/*/SKILL.md)
