@@ -22,7 +22,7 @@ Conventional Commits, imperative summary of about 72 characters or fewer, ending
 Open it with gh against the parent branch (in a later session, the PR's existing base), titled like the commit summary, with Summary, Changes and Testing sections and `Closes #<issue>` when there is one.
 
 ## Merge
-Merge only when CI has passed (none pending or failed; no checks counts as passed, say so), no review requests changes and no review thread is unresolved; otherwise stop and tell the user which. If the branch is behind its base, rebase it with `gh pr update-branch --rebase` and wait for CI again; stop on conflicts. Then merge without asking again: rebase if the PR has 1 commit, squash if more. If that method isn't allowed, stop and tell the user; don't try another.
+Merge only when no review requests changes and no review thread is unresolved; otherwise stop and tell the user which. CI is optional: don't wait for checks or require them to pass, but if any are pending or failed, name them. If the branch is behind its base, rebase it with `gh pr update-branch --rebase`; stop on conflicts. Then merge without asking again: rebase if the PR has 1 commit, squash if more. If that method isn't allowed, stop and tell the user; don't try another.
 
 ## After merging
 Delete the remote and local branch, switch to the parent branch, pull, and prune stale remote branches. If there's an issue, close it or move it to Done in its tracker (GitHub, Jira, Linear…) unless the merge did, and comment with a link to the merged PR; if you can't reach the tracker, say so.
