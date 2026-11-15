@@ -8,10 +8,10 @@ description: Write a failing test before the code that makes it pass, for new fe
 Every change to behavior starts with a test that fails for the right reason.
 
 ## Cycle
-1. **Red**: write one small test for the next piece of behavior (when working outside-in, a failing higher-level test may stay red while unit cycles run under it). Run it and confirm it fails for the expected reason (a failed assertion), not a typo, import error or missing fixture.
-2. **Green**: write the minimum code that makes it pass. Run it, plus the tests around it.
-3. **Refactor**: clean up the code and the test while everything stays green. Run them again.
-4. Repeat until the behavior is complete, then run the full suite.
+1. **Red**: write one small test for the next piece of behavior (when working outside-in, a failing higher-level test may stay red while unit cycles run under it). Run only that test and confirm it fails for the expected reason (a failed assertion), not a typo, import error or missing fixture.
+2. **Green**: write the minimum code that makes it pass. Run it, plus the tests for the code you touched, not the full suite.
+3. **Refactor**: clean up the code and the test while everything stays green. If you changed anything, run the same tests again.
+4. Repeat until the behavior is complete, then run the full suite once.
 
 ## Levels
 - Unit tests cover logic, integration tests cover module and IO boundaries with real collaborators where cheap, and end-to-end tests cover user-visible flows.
@@ -19,6 +19,7 @@ Every change to behavior starts with a test that fails for the right reason.
 - When the behavior spans layers, work outside-in: a failing higher-level test first, then unit tests.
 
 ## Rules
+- While you work, run the narrowest command that covers the change: one test, file or directory, not the project's whole `make test` or CI check. Run the full suite and checks when the behavior is complete, and again only if you change code after that.
 - Use the project's existing test framework, layout and naming. Don't add a new framework or dependency without asking.
 - Test behavior through the public interface, not implementation details. Mock only at real boundaries (network, clock, filesystem, external services).
 - One behavior per test, with a name that says what it checks.
