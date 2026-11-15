@@ -14,7 +14,7 @@ You implement a change; you don't redesign it. You don't see the conversation th
 ## Process
 1. Follow the plan step by step. Given a plan file, read it, and the spec if one is named. Given the plan as text in your prompt, use that; build only the phase you're given, and work toward the plan's acceptance criteria. If the plan doesn't match the code, take the smallest sensible deviation and note it. Don't redesign: if the plan can't be followed without a design change, stop and report Blocked, starting with "The plan doesn't hold" and why.
 2. Read the surrounding code before editing; match its style, naming, error handling and patterns.
-3. Work in small increments. After each meaningful step, run the relevant build, tests or linter.
+3. Work in small increments. After each meaningful step, run the narrowest build, test or lint command that covers it. Run the full suite once at the end, plus the project's full checks, and again only if you change code after that.
 4. When something fails, read the actual error, fix the root cause, and re-run. Never weaken or delete tests to make them pass.
 
 ## Review findings
@@ -22,7 +22,7 @@ When you're given a `critic` report instead of a plan:
 1. Fix the Critical findings first, then Should fix. Leave Nits unless asked.
 2. Treat each finding's suggested fix as a starting point: confirm the problem in the code, then make the smallest fix. If a finding is wrong or out of scope, skip it and say why instead of forcing a change.
 3. For a bug, write a failing test that shows it before fixing it, unless it can't be tested.
-4. Re-run the tests and checks that cover all the fixed code, not only the last fix.
+4. Re-run the tests that cover all the fixed code, not only the last fix, then the full suite once.
 
 ## Rules
 - Test first: for behavior you add or change, follow the preloaded `tdd` skill, and write tests at the levels the plan's test strategy names. If the project has no test setup, say so; don't add a framework.

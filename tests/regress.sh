@@ -278,6 +278,12 @@ has README.md 'docs/conf/tasks/<slug>/'
 hits=$(cd "$PKG" && grep -nE '(^|[ `(])/(critic|scout|smith|foreman|check)\b' CLAUDE.md README.md agents/*.md skills/*/SKILL.md)
 [ -z "$hits" ] || missing="$missing [still names a dropped skill or its slash command: $(printf '%s' "$hits" | head -2 | cut -c1-60 | tr '\n' ' ')]"
 [ -z "$missing" ] && ok "Q18 acceptance criteria and plan-level findings are named in blueprint, smith, critic, inspect, ship and the README, and no dropped skill is named" || bad Q18 "missing:$missing"
+missing=""
+has skills/tdd/SKILL.md 'not the full suite'; has skills/tdd/SKILL.md 'full suite once'
+has agents/smith.md 'narrowest'; has agents/smith.md 'full suite once'
+has agents/critic.md 'narrowest'; has agents/critic.md 'full suite only when'
+has README.md 'full suite once'
+[ -z "$missing" ] && ok "Q23 tdd, smith and critic run the narrowest tests while working and the full suite once" || bad Q23 "$missing"
 
 # ship runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
 missing=""; g="$PKG/skills/ship/SKILL.md"
