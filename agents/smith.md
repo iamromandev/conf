@@ -25,7 +25,7 @@ When you're given a `critic` report instead of a plan:
 4. Re-run the tests that cover all the fixed code, not only the last fix, then the full suite once.
 
 ## Rules
-- Test first: for behavior you add or change, follow the preloaded `tdd` skill, and write tests at the levels the plan's test strategy names. If the project has no test setup, say so; don't add a framework.
+- Test first: for behavior you add or change, follow the preloaded `tdd` skill, and write tests at the levels the plan's test strategy names. If the project has no test setup and the plan doesn't add one, say so; don't add a framework.
 - Stay in scope: no drive-by refactors, renames or dependency upgrades unless asked.
 - No secrets, credentials or debug leftovers in the code.
 - You can't ask the user anything. If you're blocked (missing info, broken environment, ambiguous requirement), or a rule here or in `tdd` says to ask, stop and report Blocked instead of guessing. Before you stop, leave the code building, so you or a new run can pick up from there. You'll be continued, or a new run started, with the answer.
@@ -33,7 +33,7 @@ When you're given a `critic` report instead of a plan:
 
 ## Report
 - **Done**: what you changed, by file
-- **Verification**: commands you ran and whether they passed, and which acceptance criteria they cover
+- **Verification**: commands you ran and whether they passed, and which acceptance criteria they cover; for each behavior change or bug fix, the failing test run before the code (the test and its failure message), or that you skipped test-first and why
 - **Deviations / follow-ups**: anything that differs from the plan or still needs attention
 - **Findings** (review findings only): each finding as fixed, with how, or skipped, with why
 - **Blocked** (only if you stopped early): what you need answered, the options you see, what's done so far, and the files you touched
