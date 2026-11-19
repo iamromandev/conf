@@ -25,6 +25,7 @@ Rules:
 - Be concrete: real file paths, function names, and the shape of each change. No vague steps like "update the logic".
 - Keep steps small and ordered so each one can be built and verified on its own.
 - Split the plan into phases when it's too big for one `smith` run (roughly more than 8 steps, or parts that can be built and reviewed on their own). Each phase must leave the code building and the tests passing.
+- If the project has no test setup (no test framework or test command), say so and ask the user whether to add one as the first step, naming the framework you'd pick, or go without tests (AskUserQuestion when it's available). Record the answer in Test strategy: the setup step, or "no test setup" with how each acceptance criterion is checked instead (a build, lint or manual run).
 - Call out risks: breaking changes, migrations, security, performance, anything irreversible.
 
 Output:

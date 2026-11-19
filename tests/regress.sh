@@ -247,8 +247,9 @@ for t in Edit Write Bash; do printf '%s\n' "$fm" | grep '^tools:' | grep -q "$t"
 printf '%s\n' "$fm" | grep -A3 -x 'skills:' | grep -qx '  - tdd' || missing="$missing [skills: - tdd]"
 for p in "can't ask the user" 'report Blocked' 'leave the code building' 'files you touched'; do sed '1,/^---$/d' "$s" 2>/dev/null | grep -q "$p" || missing="$missing [$p]"; done
 sed '1,/^---$/d' "$s" 2>/dev/null | grep -qF 'as text' || missing="$missing [smith: a plan can arrive as text]"
+sed '1,/^---$/d' "$s" 2>/dev/null | grep '^- \*\*Verification\*\*' | grep -qF 'failing test run' || missing="$missing [Verification: failing test run before each change]"
 sed -n 's/^description: //p' "$s" 2>/dev/null | grep -qF '/blueprint' || missing="$missing [smith description: usually from /blueprint]"
-[ -z "$missing" ] && ok "Q15 smith can edit and run commands, preloads tdd, and reports Blocked instead of asking, leaving work a new run can pick up" || bad Q15 "agents/smith.md:$missing"
+[ -z "$missing" ] && ok "Q15 smith can edit and run commands, preloads tdd, reports its red runs, and reports Blocked instead of asking, leaving work a new run can pick up" || bad Q15 "agents/smith.md:$missing"
 
 c="$PKG/CLAUDE.md"; missing=""
 nt=$(grep '^- Non-trivial change' "$c")
@@ -284,6 +285,11 @@ has agents/smith.md 'narrowest'; has agents/smith.md 'full suite once'
 has agents/critic.md 'narrowest'; has agents/critic.md 'full suite only when'
 has README.md 'full suite once'
 [ -z "$missing" ] && ok "Q23 tdd, smith and critic run the narrowest tests while working and the full suite once" || bad Q23 "$missing"
+
+missing=""
+has skills/blueprint/SKILL.md 'no test setup'; has skills/blueprint/SKILL.md 'add one as the first step'
+has agents/smith.md "the plan doesn't add one"
+[ -z "$missing" ] && ok "Q24 blueprint flags a project with no test setup and asks whether to add one, and smith adds a framework only when the plan says to" || bad Q24 "$missing"
 
 # ship runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
 missing=""; g="$PKG/skills/ship/SKILL.md"
