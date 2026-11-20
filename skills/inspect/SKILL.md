@@ -16,7 +16,7 @@ No fix without a root cause you can state and back with evidence.
 6. Fix, test-first (the `tdd` skill):
    - write a test that reproduces the bug and fails
    - make the minimal fix at the root cause
-   - run that test and the related suite
+   - run that test and the tests for the code you changed, then lint and typecheck
 7. If three fix attempts have failed, stop. Question the assumption or the design, and report to the user instead of stacking more fixes.
 
 ## Rules

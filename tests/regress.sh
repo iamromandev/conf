@@ -227,7 +227,7 @@ g="$PKG/skills/ship/SKILL.md"; missing=""
 grep '^- Git work' "$PKG/CLAUDE.md" | grep 'push' | grep 'only when I ask' | grep 'Load the `ship` skill first' | grep -q 'take precedence over the default git instructions where they conflict' || missing="$missing [CLAUDE.md: a git line covering push, only when I ask, loading ship first, taking precedence over the defaults only where they conflict]"
 sed -n 's/^description: //p' "$g" 2>/dev/null | grep -q 'push' || missing="$missing [ship description: push]"
 for s in '<short-kebab-name>' 'Closes #<issue>' 'squash if more'; do grep -q -- "$s" "$PKG/CLAUDE.md" && missing="$missing [CLAUDE.md still has: $s]"; done
-for s in "run the project's tests" '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -qi -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
+for s in "run the project's lint and type check" '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -qi -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
 [ -z "$missing" ] && ok "Q8 the git rules (branch, commit, PR, merge, cleanup, issue update) are in the ship skill, and CLAUDE.md only says to use it when asked" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
 a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: medium' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: medium' "$a/scout.md" \
@@ -280,11 +280,13 @@ hits=$(cd "$PKG" && grep -nE '(^|[ `(])/(critic|scout|smith|foreman|check)\b' CL
 [ -z "$hits" ] || missing="$missing [still names a dropped skill or its slash command: $(printf '%s' "$hits" | head -2 | cut -c1-60 | tr '\n' ' ')]"
 [ -z "$missing" ] && ok "Q18 acceptance criteria and plan-level findings are named in blueprint, smith, critic, inspect, ship and the README, and no dropped skill is named" || bad Q18 "missing:$missing"
 missing=""
-has skills/tdd/SKILL.md 'not the full suite'; has skills/tdd/SKILL.md 'full suite once'
-has agents/smith.md 'narrowest'; has agents/smith.md 'full suite once'
-has agents/critic.md 'narrowest'; has agents/critic.md 'full suite only when'
-has README.md 'full suite once'
-[ -z "$missing" ] && ok "Q23 tdd, smith and critic run the narrowest tests while working and the full suite once" || bad Q23 "$missing"
+has skills/tdd/SKILL.md 'not the full suite'
+for f in skills/tdd/SKILL.md agents/smith.md agents/critic.md; do has "$f" "Don't run the full suite"; done
+has agents/smith.md 'narrowest'; has agents/critic.md 'narrowest'; has skills/inspect/SKILL.md 'then lint and typecheck'
+has README.md 'never the full suite'
+hits=$(cd "$PKG" && grep -nE 'full suite once|full suite only when|full run' README.md agents/*.md skills/*/SKILL.md)
+[ -z "$hits" ] || missing="$missing [still runs the full suite: $(printf '%s' "$hits" | head -2 | cut -c1-60 | tr '\n' ' ')]"
+[ -z "$missing" ] && ok "Q23 tdd, smith, inspect and critic run the narrowest tests plus lint and typecheck, never the full suite" || bad Q23 "$missing"
 
 missing=""
 has skills/blueprint/SKILL.md 'no test setup'; has skills/blueprint/SKILL.md 'add one as the first step'
@@ -297,6 +299,25 @@ has agents/smith.md 'Change files with Edit or Write'; has agents/smith.md 'thre
 has agents/smith.md 'If the prompt that dispatched you specifies a report format'
 has agents/critic.md 'Pick the verdict from the findings'; has agents/critic.md 'on a copy in a temp folder'; has agents/critic.md 'name the command that would check it'
 [ -z "$missing" ] && ok "Q25 smith and critic search with rg, never sleep to wait, smith edits with Edit or Write and stops after three failed fixes, and critic picks its verdict from its findings and experiments on a copy" || bad Q25 "$missing"
+
+missing=""
+for f in skills/tdd/SKILL.md agents/smith.md; do has "$f" 'lint and typecheck (for a compiled language, the build)'; done
+for f in agents/smith.md agents/critic.md; do has "$f" 'after 2 minutes'; has "$f" '`timeout: 600000`'; done
+[ -z "$missing" ] && ok "Q28 tdd and smith finish with lint and typecheck, and smith and critic give long commands a 10-minute timeout" || bad Q28 "$missing"
+
+missing=""
+has skills/ship/SKILL.md 'full test suite only when the user asks for it'
+grep -qF "Run the project's tests" "$PKG/skills/ship/SKILL.md" && missing="$missing [ship still always runs the tests]"
+for f in skills/tdd/SKILL.md agents/smith.md agents/critic.md; do has "$f" 'only `ship` runs it, when the user asks'; done
+has README.md 'the full test suite only when you ask'
+hits=$(cd "$PKG" && grep -n 'left to CI or' README.md agents/*.md skills/*/SKILL.md)
+[ -z "$hits" ] || missing="$missing [still leaves the full suite to CI: $(printf '%s' "$hits" | head -2 | cut -c1-60 | tr '\n' ' ')]"
+[ -z "$missing" ] && ok "Q29 the full suite is optional and runs only in ship, when the user asks" || bad Q29 "$missing"
+
+missing=""
+has agents/smith.md 'in a separate Bash call, never chained with the edit'; has agents/smith.md 'in parallel'
+has agents/smith.md 'reuse them for the whole run'; has agents/smith.md 'send only the changed lines'; has agents/smith.md 'Keep the report short'
+[ -z "$missing" ] && ok "Q30 smith finds its commands once, edits with Edit and tests in a separate call, makes independent calls in parallel and keeps its report short" || bad Q30 "$missing"
 
 missing=""
 # CLAUDE.md names each agent's ceiling, one step above its frontmatter model and effort, and its example override stays within it
@@ -330,9 +351,9 @@ grep -A3 '^`tests/regress.sh` runs' "$PKG/README.md" | grep -qF 'report' || miss
 
 # ship runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
 missing=""; g="$PKG/skills/ship/SKILL.md"
-for t in "Run the project's tests" 'stop and report if they fail' 'keep it' '`docs/conf/tasks/` is never committed' "the PR's existing base"; do grep -qF -- "$t" "$g" 2>/dev/null || missing="$missing [ship: $t]"; done
+for t in "Run the project's lint and type check" 'stop and report if they fail' 'keep it' '`docs/conf/tasks/` is never committed' "the PR's existing base"; do grep -qF -- "$t" "$g" 2>/dev/null || missing="$missing [ship: $t]"; done
 for t in 'status.md' '`- Parent:`' 'Run the `check` skill'; do grep -qF -- "$t" "$g" 2>/dev/null && missing="$missing [ship still has: $t]"; done
-[ -z "$missing" ] && ok "Q19 ship runs the project's tests before committing and no longer reads a status file" || bad Q19 "missing:$missing"
+[ -z "$missing" ] && ok "Q19 ship runs lint and type check before committing and no longer reads a status file" || bad Q19 "missing:$missing"
 
 # scope, spec and blueprint are loadable on their own, run by the user, and each names the next step
 missing=""
