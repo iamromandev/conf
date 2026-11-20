@@ -22,6 +22,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 | `spec` | Writes agreed scope or a behavior change up as a testable spec: numbered requirements (R) and non-functional requirements (NFR), data and interfaces, acceptance criteria that name the requirements they prove, and open questions. Run it as `/spec`; it asks where to save it and suggests `/blueprint` next |
 | `blueprint` | Plans a change step by step, with architecture, interfaces and data models, a test strategy per criterion, rollout and rollback, acceptance criteria and phases, for `smith` to build. Run it as `/blueprint`; it asks where to save it and suggests asking `smith` next |
 | `inspect` | Systematic debugging: reproduce, find the root cause with evidence, then fix with a failing test first |
+| `report` | Explains what a change did and how it solves the feature or bug, or any task, feature or function and how it got there, from evidence: test runs, reports, git history. Runs only when you ask, as `/report` or in words; Claude suggests it after a change. Saves to `report.md` only when you ask |
 | `tdd` | Test-driven development: red, green, refactor, at the unit, integration or end-to-end level the plan's test strategy names |
 | `ship` | Commits, pushes, opens a PR or merges when you ask, up to the stage you name, following the branch, commit, PR and merge rules, which take precedence over Claude Code's defaults where they conflict |
 
@@ -37,13 +38,14 @@ mechanical change          → do it directly, tests first (renames, config valu
 non-trivial change         → you run each step, and each suggests the next:
                                  /scope → /spec → /blueprint → smith (tdd) → critic
 something broken           → inspect → fix test-first (tdd), or /blueprint for a big fix
+after a change (optional)  → /report, only when you ask; also any time for a task, feature or function
 before saying "done"       → run the tests or checks and read their output
 git, only when you ask     → ship: branch → commit → PR → merge (+ cleanup, issue to Done)
 ```
 
 - `smith` and `inspect` write code test-first with `tdd`: a failing test, then the code that makes it pass. While they work they run only the tests that cover the change, and the full suite once at the end. Small, obvious changes skip it, along with the rest of the workflow.
 - Mechanical changes skip the plan steps and `critic` however many files they touch: renames with every reference updated, config values, doc edits and rewording that keeps the meaning, as long as they don't touch logic, security, auth or data. Claude updates the tests that cover them first, if any, makes the change and runs the tests. A review costs a subagent re-reading the files from scratch, which is rarely worth it for a change with no logic in it.
-- Claude runs no step you didn't ask for. After each one it suggests the next: `/scope` suggests `/spec`, `/spec` suggests `/blueprint`, and `/blueprint` suggests asking `smith` to build it, then `critic` to review.
+- Claude runs no step you didn't ask for. After each one it suggests the next: `/scope` suggests `/spec`, `/spec` suggests `/blueprint`, and `/blueprint` suggests asking `smith` to build it, then `critic` to review. After `smith`, `critic` or `inspect` it also suggests `/report`.
 - The `scope`, `spec` and `blueprint` skills run in the main conversation, so Claude asks you questions that would change the scope or plan as they come up.
 - `spec` and `blueprint` ask each time whether to save their output to `docs/conf/tasks/<slug>/` (`spec.md`, `plan.md`), with a slug like `42-csv-export`, or keep it in the conversation. Saved files are kept out of git through `.git/info/exclude`, so no tracked file changes. A plan kept in the conversation goes to `smith` and `critic` as text in their prompt; in a later session it's gone, so run `/blueprint` again.
 - After a `critic` `[plan]` finding or `smith`'s "The plan doesn't hold", run `/blueprint` again; other findings go back to `smith`.
@@ -142,11 +144,11 @@ Copy `agents/*.md` to `~/.claude/agents/`, each folder in `skills/` to `~/.claud
 
 ## Undo
 
-Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-- conf: end of section -->` comment), and the installed agents and skills you no longer want. The installer keeps no backups of what it replaced. Saved specs and plans live in each project's `docs/conf/tasks/`; delete them, and the `**/docs/conf/tasks/` line in that repo's `.git/info/exclude`, if you no longer want them.
+Delete the "Claude Code subagents" section from `CLAUDE.md` (it ends at the `<!-- conf: end of section -->` comment), and the installed agents and skills you no longer want. The installer keeps no backups of what it replaced. Saved specs, plans and reports live in each project's `docs/conf/tasks/`; delete them, and the `**/docs/conf/tasks/` line in that repo's `.git/info/exclude`, if you no longer want them.
 
 ## Tests
 
-`tests/regress.sh` runs `install.sh` through about 150 checks, including the OpenCode target (paths, the agent conversion, `--project`, `--dry-run` and an unconvertible agent): fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, that the installer leaves old skill folders alone, that `scope`, `spec` and `blueprint` are model-invocable, inline and name their next step, and that CLAUDE.md routes non-trivial work down that chain.
+`tests/regress.sh` runs `install.sh` through about 150 checks, including the OpenCode target (paths, the agent conversion, `--project`, `--dry-run` and an unconvertible agent): fresh installs and re-runs, `--dry-run`, `--project`, replacing an installed section with your own lines around and inside it and after a line is reworded, and CLAUDE.md edge cases such as code blocks, headings without an end comment, duplicate copies, Windows line endings and byte order marks. It compares the resulting files byte for byte, and checks the agents' models, the routing in CLAUDE.md and the README against each other, that the installer leaves old skill folders alone, that `scope`, `spec` and `blueprint` are model-invocable, inline and name their next step, that CLAUDE.md routes non-trivial work down that chain, and that `report` has valid frontmatter, user-only wording and its sections.
 
 ```bash
 bash tests/regress.sh
