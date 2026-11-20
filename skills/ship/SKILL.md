@@ -8,7 +8,7 @@ description: Commit, push, open a pull request or merge, following the branch, c
 Take the change as far as the user asked (commit, PR or merge), and no further.
 
 ## Before committing
-- Run the project's tests (and build, linter, type check if it has them) and read the output; stop and report if they fail.
+- Run the project's lint and type check (and build, if it has one) and read the output; stop and report if they fail. Run the full test suite only when the user asks for it, with `timeout: 600000`, and stop and report if it fails.
 - Without a GitHub remote or a signed-in gh, stop after committing and say why.
 - If the parent branch is gone or isn't known (a branch the user named, or one made in an earlier session), ask the user which base to use. This applies to cutting the branch and to the PR base.
 
