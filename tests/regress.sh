@@ -298,6 +298,17 @@ has agents/smith.md 'If the prompt that dispatched you specifies a report format
 has agents/critic.md 'Pick the verdict from the findings'; has agents/critic.md 'on a copy in a temp folder'; has agents/critic.md 'name the command that would check it'
 [ -z "$missing" ] && ok "Q25 smith and critic search with rg, never sleep to wait, smith edits with Edit or Write and stops after three failed fixes, and critic picks its verdict from its findings and experiments on a copy" || bad Q25 "$missing"
 
+missing=""
+# CLAUDE.md names each agent's ceiling, one step above its frontmatter model and effort, and its example override stays within it
+up() { case "$1" in haiku) echo sonnet;; sonnet) echo opus;; low) echo medium;; medium) echo high;; high) echo xhigh;; *) echo "?";; esac; }
+rule=$(grep '^- Agent model and effort' "$PKG/CLAUDE.md")
+for n in scout smith critic; do
+  mo=$(sed -n 's/^model: //p' "$PKG/agents/$n.md"); ef=$(sed -n 's/^effort: //p' "$PKG/agents/$n.md")
+  printf '%s' "$rule" | grep -qF "\`$n\` up to $(up "$mo") and $(up "$ef")" || missing="$missing [CLAUDE.md ceiling for $n: $(up "$mo") and $(up "$ef")]"
+done
+printf '%s' "$rule" | grep -qF '"critic at high: auth change"' || missing="$missing [CLAUDE.md example: critic at high]"
+[ -z "$missing" ] && ok "Q26 CLAUDE.md names each agent's model and effort ceiling, one step above its default" || bad Q26 "$missing"
+
 # ship runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
 missing=""; g="$PKG/skills/ship/SKILL.md"
 for t in "Run the project's tests" 'stop and report if they fail' 'keep it' '`docs/conf/tasks/` is never committed' "the PR's existing base"; do grep -qF -- "$t" "$g" 2>/dev/null || missing="$missing [ship: $t]"; done
