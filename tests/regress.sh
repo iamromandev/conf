@@ -44,9 +44,9 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 6 ] && ok "B1 fresh install copies 3 agents, 6 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 7 ] && ok "B1 fresh install copies 3 agents, 7 skills" || bad B1 "missing files"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && ok "B1 rerun reports 10 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 11 ] && ok "B1 rerun reports 11 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
@@ -240,7 +240,7 @@ hits=$(cd "$PKG" && grep -nE "$legacy|[b]uild (report|skill)" README.md install.
 # The agents only get the build checks: critic's prompt names its role (code review) with a word on the list above
 hits="$hits$(cd "$PKG" && grep -nE '`[b]uild`|[b]uild (report|skill)' agents/*.md)"
 [ -z "$hits" ] && ok "Q11 no earlier names or upgrade paths are left" || bad Q11 "$(printf '%s' "$hits" | head -3 | cut -c1-80)"
-[ "$(ls "$PKG/skills" | tr '\n' ' ')" = "blueprint inspect scope ship spec tdd " ] && ok "Q12 the package ships exactly the skills blueprint, inspect, scope, ship, spec and tdd" || bad Q12 "skills/ holds: $(ls "$PKG/skills" | tr '\n' ' ')"
+[ "$(ls "$PKG/skills" | tr '\n' ' ')" = "blueprint inspect report scope ship spec tdd " ] && ok "Q12 the package ships exactly the skills blueprint, inspect, report, scope, ship, spec and tdd" || bad Q12 "skills/ holds: $(ls "$PKG/skills" | tr '\n' ' ')"
 grep '^- Mechanical changes' "$PKG/CLAUDE.md" | grep '`critic`' | grep 'logic, security, auth or data' | grep -q 'keeps the meaning' && ok "Q13 mechanical changes skip the plan steps and critic, unless they touch logic, security, auth or data" || bad Q13 "no mechanical-changes route with its limits"
 s="$PKG/agents/smith.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
 for t in Edit Write Bash; do printf '%s\n' "$fm" | grep '^tools:' | grep -q "$t" || missing="$missing [tools: $t]"; done
@@ -309,6 +309,25 @@ done
 printf '%s' "$rule" | grep -qF '"critic at high: auth change"' || missing="$missing [CLAUDE.md example: critic at high]"
 [ -z "$missing" ] && ok "Q26 CLAUDE.md names each agent's model and effort ceiling, one step above its default" || bad Q26 "$missing"
 
+# report is loadable on its own, runs only when the user asks, names its sections and the evidence rule, and CLAUDE.md and the README cover it
+missing=""; s="$PKG/skills/report/SKILL.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null)
+[ "$(sed -n 1p "$s" 2>/dev/null)" = '---' ] && [ "$(printf '%s\n' "$fm" | tail -n 1)" = '---' ] || missing="$missing [report: frontmatter between --- lines]"
+printf '%s\n' "$fm" | grep -qx 'name: report' || missing="$missing [report: name]"
+printf '%s\n' "$fm" | grep -q '^description: .' || missing="$missing [report: description]"
+printf '%s\n' "$fm" | grep -q '^argument-hint: .' || missing="$missing [report: argument-hint]"
+printf '%s\n' "$fm" | grep -qE '^(disable-model-invocation|context|agent):' && missing="$missing [report: sets disable-model-invocation, context or agent]"
+printf '%s\n' "$fm" | grep -E '^(description|argument-hint): ' | grep -qE ': .*: | #|:$' && missing="$missing [report: description or argument-hint is not plain YAML]"
+printf '%s\n' "$fm" | grep '^description: ' | grep -qF 'only when the user asks' || missing="$missing [report description: only when the user asks]"
+for t in '**Problem**' '**Changes**' '**How it solves it**' '**Verification**' '**Deviations & open items**' 'not verified' 'secrets' '.env' 'scout' 'report.md' '.git/info/exclude' '**How it works**' '**How it got here**'; do has skills/report/SKILL.md "$t"; done
+[ "$(wc -l < "$s" 2>/dev/null | tr -d ' ')" -le 60 ] 2>/dev/null && [ -f "$s" ] || missing="$missing [report: missing or over 60 lines]"
+nt=$(grep '^- Non-trivial change' "$PKG/CLAUDE.md")
+for t in '`/report`' 'only when I ask' '`smith`' '`critic`' '`inspect`'; do printf '%s\n' "$nt" | grep -qF -- "$t" || missing="$missing [Non-trivial line: $t]"; done
+[ "$(wc -l < "$PKG/CLAUDE.md" | tr -d ' ')" = 12 ] || missing="$missing [CLAUDE.md is not 12 lines]"
+grep -q '^| `report` |' "$PKG/README.md" || missing="$missing [README: report row]"
+grep -q '^after a change.*/report' "$PKG/README.md" || missing="$missing [README: Workflow line for /report]"
+grep -A3 '^`tests/regress.sh` runs' "$PKG/README.md" | grep -qF 'report' || missing="$missing [README Tests: report]"
+[ -z "$missing" ] && ok "Q27 report is plain-YAML, runs only when asked, names its sections and evidence rule, and CLAUDE.md and the README cover it" || bad Q27 "$missing"
+
 # ship runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
 missing=""; g="$PKG/skills/ship/SKILL.md"
 for t in "Run the project's tests" 'stop and report if they fail' 'keep it' '`docs/conf/tasks/` is never committed' "the PR's existing base"; do grep -qF -- "$t" "$g" 2>/dev/null || missing="$missing [ship: $t]"; done
@@ -375,11 +394,11 @@ OCWD="$T/oc-cwd"; rm -rf "$OCWD"; mkdir -p "$OCWD"; cd "$OCWD" || exit 1
 H=$(ohome oc0); a=$(treesum "$H"); out=$(inst "$H" "" --target bogus); rc=$?
 [ $rc = 1 ] && [ "$a" = "$(treesum "$H")" ] && printf '%s' "$out" | grep -q 'Unknown target: bogus (use claude or opencode)' && ok "OC1 --target bogus exits 1, says so and writes nothing" || bad OC1 "rc=$rc output: $out"
 H=$(ohome oc1); out=$(inst "$H" "" --target opencode); rc=$?
-[ $rc = 0 ] && [ "$(ls "$H/$OC/agents" | tr '\n' ' ')" = "critic.md scout.md smith.md " ] && [ "$(ls "$H/$OC/skills" | wc -l | tr -d ' ')" = 6 ] && [ ! -e "$H/.claude" ] && ok "OC2 --target opencode installs 3 agents and 6 skills under ~/.config/opencode, and nothing in ~/.claude" || bad OC2 "rc=$rc: $(find "$H" -maxdepth 3 | head -20 | tr '\n' ' ')"
+[ $rc = 0 ] && [ "$(ls "$H/$OC/agents" | tr '\n' ' ')" = "critic.md scout.md smith.md " ] && [ "$(ls "$H/$OC/skills" | wc -l | tr -d ' ')" = 7 ] && [ ! -e "$H/.claude" ] && ok "OC2 --target opencode installs 3 agents and 7 skills under ~/.config/opencode, and nothing in ~/.claude" || bad OC2 "rc=$rc: $(find "$H" -maxdepth 3 | head -20 | tr '\n' ' ')"
 same "OC2 the rules section is AGENTS.md" "$H/$OC/AGENTS.md" "$SEC"
 printf '%s\n' "$out" | grep -qi 'warning' && bad OC2 "unexpected warning: $(printf '%s' "$out" | grep -i -m1 warning)" || ok "OC2 no warning on a clean install"
 P="$T/oc-proj"; rm -rf "$P"; mkdir -p "$P"; H=$(ohome oc2); out=$(cd "$P" && inst "$H" "" --target opencode --project); rc=$?
-[ $rc = 0 ] && [ "$(ls "$P/.opencode/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$P/.opencode/skills" | wc -l | tr -d ' ')" = 6 ] && [ ! -e "$P/.claude" ] && [ ! -e "$H/.config" ] && ok "OC2 --project installs under ./.opencode, and nothing in HOME or ./.claude" || bad OC2 "rc=$rc: $(find "$P" -maxdepth 2 | head -12 | tr '\n' ' ')"
+[ $rc = 0 ] && [ "$(ls "$P/.opencode/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$P/.opencode/skills" | wc -l | tr -d ' ')" = 7 ] && [ ! -e "$P/.claude" ] && [ ! -e "$H/.config" ] && ok "OC2 --project installs under ./.opencode, and nothing in HOME or ./.claude" || bad OC2 "rc=$rc: $(find "$P" -maxdepth 2 | head -12 | tr '\n' ' ')"
 same "OC2 --project puts the section in ./AGENTS.md" "$P/AGENTS.md" "$SEC"
 # the converted agents
 H=$(ohome oc3); inst "$H" "" --target opencode >/dev/null; A="$H/$OC/agents"
@@ -413,7 +432,7 @@ for d in "$PKG"/skills/*/; do diff -rq "$d" "$H/$OC/skills/$(basename "$d")" >/d
 # the installed tree has no Claude-only tool name outside the "when it's available" wording
 h=$(grep -rh 'AskUserQuestion' "$H/$OC" | grep -v "AskUserQuestion when it's available" | head -1)
 [ -z "$h" ] && ok "OC4 AskUserQuestion appears in the opencode install only as 'when it's available'" || bad OC4 "$h"
-out=$(inst "$H" "" --target opencode); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && [ "$(printf '%s\n' "$out" | grep -cE '^(installed|replaced|updated|appended|created|removed|warning)')" = 0 ] && ok "OC6 a second run reports 10 unchanged and nothing else" || bad OC6 "rerun: $(printf '%s' "$out" | grep -vE '^(unchanged|Target|Agents|AGENTS|$|Done)' | head -3)"
+out=$(inst "$H" "" --target opencode); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 11 ] && [ "$(printf '%s\n' "$out" | grep -cE '^(installed|replaced|updated|appended|created|removed|warning)')" = 0 ] && ok "OC6 a second run reports 11 unchanged and nothing else" || bad OC6 "rerun: $(printf '%s' "$out" | grep -vE '^(unchanged|Target|Agents|AGENTS|$|Done)' | head -3)"
 H=$(ohome oc5); a=$(treesum "$H"); out=$(inst "$H" "" --target opencode --dry-run)
 [ "$a" = "$(treesum "$H")" ] && printf '%s\n' "$out" | grep -q '^would install  *agents/scout.md$' && printf '%s\n' "$out" | grep -q '^would create ' && ok "OC5 --dry-run writes nothing and says what it would install" || bad OC5 "dry run: $(printf '%s' "$out" | head -8 | tr '\n' '|')"
 H=$(ohome oc5b); mkdir -p "$H/$OC"; printf '# Mine\n' > "$H/$OC/AGENTS.md"; out=$(inst "$H" "" --target opencode --dry-run)

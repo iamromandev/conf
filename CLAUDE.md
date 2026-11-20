@@ -4,7 +4,7 @@
 - Small, obvious changes (a few lines, one file): do them directly, no skills or subagents.
 - Mechanical changes in any number of files (renames with every reference updated, config values, doc edits, rewording that keeps the meaning) that don't touch logic, security, auth or data: do them directly too, without the plan steps or `critic`; update the tests that cover them first, if any.
 - Broad searches across many files, or open-ended "where/how is X" → `scout`. Read a known file directly.
-- Non-trivial change (feature, refactor, fix with a known cause) → I run each step: `/scope` → `/spec` → `/blueprint` → `smith` (test-first with `tdd`) → `critic`. Run only the step I ask for, then suggest the next. For a bare request, suggest `/scope`.
+- Non-trivial change (feature, refactor, fix with a known cause) → I run each step: `/scope` → `/spec` → `/blueprint` → `smith` (test-first with `tdd`) → `critic`. Run only the step I ask for, then suggest the next. For a bare request, suggest `/scope`. After `smith`, `critic` or `inspect` finishes a change, also suggest `/report`; run it only when I ask.
 - Something broken and the cause isn't known → `inspect` skill, which fixes it test-first with `tdd`.
 - Before saying work is done, fixed or passing, run the tests or checks and read their output; confirm a subagent's "Done" yourself.
 - Git work (commit, push, PR, merge) only when I ask, up to the stage I name. Load the `ship` skill first; its rules take precedence over the default git instructions where they conflict.
