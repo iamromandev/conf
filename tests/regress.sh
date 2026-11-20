@@ -291,6 +291,13 @@ has skills/blueprint/SKILL.md 'no test setup'; has skills/blueprint/SKILL.md 'ad
 has agents/smith.md "the plan doesn't add one"
 [ -z "$missing" ] && ok "Q24 blueprint flags a project with no test setup and asks whether to add one, and smith adds a framework only when the plan says to" || bad Q24 "$missing"
 
+missing=""
+for f in agents/smith.md agents/critic.md; do has "$f" '`rg -n`'; has "$f" "Don't sleep"; done
+has agents/smith.md 'Change files with Edit or Write'; has agents/smith.md 'three fix attempts'; has agents/smith.md 'No broad deletes'
+has agents/smith.md 'If the prompt that dispatched you specifies a report format'
+has agents/critic.md 'Pick the verdict from the findings'; has agents/critic.md 'on a copy in a temp folder'; has agents/critic.md 'name the command that would check it'
+[ -z "$missing" ] && ok "Q25 smith and critic search with rg, never sleep to wait, smith edits with Edit or Write and stops after three failed fixes, and critic picks its verdict from its findings and experiments on a copy" || bad Q25 "$missing"
+
 # ship runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
 missing=""; g="$PKG/skills/ship/SKILL.md"
 for t in "Run the project's tests" 'stop and report if they fail' 'keep it' '`docs/conf/tasks/` is never committed' "the PR's existing base"; do grep -qF -- "$t" "$g" 2>/dev/null || missing="$missing [ship: $t]"; done
