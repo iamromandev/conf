@@ -8,7 +8,7 @@ Subagents, skills and a CLAUDE.md section that give Claude Code a consistent wor
 
 | Agent | Model | Effort | Tools | Use it for |
 |---|---|---|---|---|
-| `scout` | haiku | low | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
+| `scout` | haiku | medium | read-only | Broad searches across many files, docs or web pages; "where/how is X" questions |
 | `critic` | sonnet | medium | read-only | Reviewing a non-trivial change for bugs, security and design issues |
 | `smith` | sonnet | low | edits code | Carrying out a plan or review findings test-first; preloads the `tdd` skill |
 

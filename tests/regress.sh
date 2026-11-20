@@ -230,10 +230,10 @@ for s in '<short-kebab-name>' 'Closes #<issue>' 'squash if more'; do grep -q -- 
 for s in "run the project's tests" '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -qi -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
 [ -z "$missing" ] && ok "Q8 the git rules (branch, commit, PR, merge, cleanup, issue update) are in the ship skill, and CLAUDE.md only says to use it when asked" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
-a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: medium' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: low' "$a/scout.md" \
+a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: medium' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: medium' "$a/scout.md" \
   && grep -qx 'model: sonnet' "$a/smith.md" && grep -qx 'effort: low' "$a/smith.md" \
-  && grep -q '^| `critic` | sonnet | medium |' "$PKG/README.md" && grep -q '^| `scout` | haiku | low |' "$PKG/README.md" && grep -q '^| `smith` | sonnet | low |' "$PKG/README.md" \
-  && ok "Q10 critic is sonnet/medium, scout haiku/low and smith sonnet/low, in the agents and README" || bad Q10 "model or effort differs"
+  && grep -q '^| `critic` | sonnet | medium |' "$PKG/README.md" && grep -q '^| `scout` | haiku | medium |' "$PKG/README.md" && grep -q '^| `smith` | sonnet | low |' "$PKG/README.md" \
+  && ok "Q10 critic is sonnet/medium, scout haiku/medium and smith sonnet/low, in the agents and README" || bad Q10 "model or effort differs"
 # (bracketed so this line doesn't match itself)
 legacy='old-[s]ections|spec-[w]riter|[s]pecifier|[p]lanner|[b]uilder|[r]etire|claude-[c]onf|[r]eviewer|[e]xplorer|`[b]uild`'
 hits=$(cd "$PKG" && grep -nE "$legacy|[b]uild (report|skill)" README.md install.sh tests/regress.sh CLAUDE.md skills/*/SKILL.md)
@@ -290,6 +290,24 @@ missing=""
 has skills/blueprint/SKILL.md 'no test setup'; has skills/blueprint/SKILL.md 'add one as the first step'
 has agents/smith.md "the plan doesn't add one"
 [ -z "$missing" ] && ok "Q24 blueprint flags a project with no test setup and asks whether to add one, and smith adds a framework only when the plan says to" || bad Q24 "$missing"
+
+missing=""
+for f in agents/smith.md agents/critic.md; do has "$f" '`rg -n`'; has "$f" "Don't sleep"; done
+has agents/smith.md 'Change files with Edit or Write'; has agents/smith.md 'three fix attempts'; has agents/smith.md 'No broad deletes'
+has agents/smith.md 'If the prompt that dispatched you specifies a report format'
+has agents/critic.md 'Pick the verdict from the findings'; has agents/critic.md 'on a copy in a temp folder'; has agents/critic.md 'name the command that would check it'
+[ -z "$missing" ] && ok "Q25 smith and critic search with rg, never sleep to wait, smith edits with Edit or Write and stops after three failed fixes, and critic picks its verdict from its findings and experiments on a copy" || bad Q25 "$missing"
+
+missing=""
+# CLAUDE.md names each agent's ceiling, one step above its frontmatter model and effort, and its example override stays within it
+up() { case "$1" in haiku) echo sonnet;; sonnet) echo opus;; low) echo medium;; medium) echo high;; high) echo xhigh;; *) echo "?";; esac; }
+rule=$(grep '^- Agent model and effort' "$PKG/CLAUDE.md")
+for n in scout smith critic; do
+  mo=$(sed -n 's/^model: //p' "$PKG/agents/$n.md"); ef=$(sed -n 's/^effort: //p' "$PKG/agents/$n.md")
+  printf '%s' "$rule" | grep -qF "\`$n\` up to $(up "$mo") and $(up "$ef")" || missing="$missing [CLAUDE.md ceiling for $n: $(up "$mo") and $(up "$ef")]"
+done
+printf '%s' "$rule" | grep -qF '"critic at high: auth change"' || missing="$missing [CLAUDE.md example: critic at high]"
+[ -z "$missing" ] && ok "Q26 CLAUDE.md names each agent's model and effort ceiling, one step above its default" || bad Q26 "$missing"
 
 # ship runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
 missing=""; g="$PKG/skills/ship/SKILL.md"
