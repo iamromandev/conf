@@ -44,9 +44,11 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | wc -l | tr -d ' ')" = 7 ] && ok "B1 fresh install copies 3 agents, 7 skills" || bad B1 "missing files"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | tr '\n' ' ')" = "blueprint inspect report scope spec tdd " ] && ok "B1 fresh install copies 3 agents and 6 skills, all but ship" || bad B1 "skills: $(ls "$H/.claude/skills" | tr '\n' ' ')"
+H=$(newhome b1s); out=$(inst "$H")
+[ ! -e "$H/.claude/skills/ship" ] && printf '%s\n' "$out" | grep -q '^skipped        skills/ship (built into Claude Code)$' && ok "B1 the claude target skips ship and says it is built into Claude Code" || bad B1 "ship: $(printf '%s' "$out" | grep -m1 ship)"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 11 ] && ok "B1 rerun reports 11 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && printf '%s\n' "$out" | grep -q '^skipped  *skills/ship' && ok "B1 rerun reports 10 unchanged and ship skipped" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
@@ -224,7 +226,7 @@ fi
 missing=""; for n in $(grep -o '`[a-z-]*`' "$PKG/CLAUDE.md" | tr -d '`' | sort -u); do [ -f "$PKG/agents/$n.md" ] || [ -d "$PKG/skills/$n" ] || missing="$missing $n"; done
 [ -z "$missing" ] && ok "Q7 every agent and skill CLAUDE.md names is in the package" || bad Q7 "not in agents/ or skills/:$missing"
 g="$PKG/skills/ship/SKILL.md"; missing=""
-grep '^- Git work' "$PKG/CLAUDE.md" | grep 'push' | grep 'only when I ask' | grep 'Load the `ship` skill first' | grep -q 'take precedence over the default git instructions where they conflict' || missing="$missing [CLAUDE.md: a git line covering push, only when I ask, loading ship first, taking precedence over the defaults only where they conflict]"
+grep '^- Git work' "$PKG/CLAUDE.md" | grep 'push' | grep 'only when I ask' | grep 'In OpenCode, load the `ship` skill first' | grep 'take precedence over the default git instructions where they conflict' | grep -q 'In Claude Code, `ship` is built in and only I start it, with `/ship`' || missing="$missing [CLAUDE.md: a git line covering push, only when I ask, OpenCode loading ship first with its rules taking precedence where they conflict, and Claude Code's built-in ship started only by /ship]"
 sed -n 's/^description: //p' "$g" 2>/dev/null | grep -q 'push' || missing="$missing [ship description: push]"
 for s in '<short-kebab-name>' 'Closes #<issue>' 'squash if more'; do grep -q -- "$s" "$PKG/CLAUDE.md" && missing="$missing [CLAUDE.md still has: $s]"; done
 for s in "run the project's lint and type check" '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -qi -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
@@ -415,7 +417,7 @@ OCWD="$T/oc-cwd"; rm -rf "$OCWD"; mkdir -p "$OCWD"; cd "$OCWD" || exit 1
 H=$(ohome oc0); a=$(treesum "$H"); out=$(inst "$H" "" --target bogus); rc=$?
 [ $rc = 1 ] && [ "$a" = "$(treesum "$H")" ] && printf '%s' "$out" | grep -q 'Unknown target: bogus (use claude or opencode)' && ok "OC1 --target bogus exits 1, says so and writes nothing" || bad OC1 "rc=$rc output: $out"
 H=$(ohome oc1); out=$(inst "$H" "" --target opencode); rc=$?
-[ $rc = 0 ] && [ "$(ls "$H/$OC/agents" | tr '\n' ' ')" = "critic.md scout.md smith.md " ] && [ "$(ls "$H/$OC/skills" | wc -l | tr -d ' ')" = 7 ] && [ ! -e "$H/.claude" ] && ok "OC2 --target opencode installs 3 agents and 7 skills under ~/.config/opencode, and nothing in ~/.claude" || bad OC2 "rc=$rc: $(find "$H" -maxdepth 3 | head -20 | tr '\n' ' ')"
+[ $rc = 0 ] && [ "$(ls "$H/$OC/agents" | tr '\n' ' ')" = "critic.md scout.md smith.md " ] && [ "$(ls "$H/$OC/skills" | wc -l | tr -d ' ')" = 7 ] && [ -f "$H/$OC/skills/ship/SKILL.md" ] && [ ! -e "$H/.claude" ] && ok "OC2 --target opencode installs 3 agents and 7 skills, ship included, under ~/.config/opencode, and nothing in ~/.claude" || bad OC2 "rc=$rc: $(find "$H" -maxdepth 3 | head -20 | tr '\n' ' ')"
 same "OC2 the rules section is AGENTS.md" "$H/$OC/AGENTS.md" "$SEC"
 printf '%s\n' "$out" | grep -qi 'warning' && bad OC2 "unexpected warning: $(printf '%s' "$out" | grep -i -m1 warning)" || ok "OC2 no warning on a clean install"
 P="$T/oc-proj"; rm -rf "$P"; mkdir -p "$P"; H=$(ohome oc2); out=$(cd "$P" && inst "$H" "" --target opencode --project); rc=$?
