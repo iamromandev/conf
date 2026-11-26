@@ -382,8 +382,6 @@ install_skills() {
   for d in "$SRC"/skills/*/; do
     rel="skills/$(basename "$d")"
     target="$SKILLS_DEST/$(basename "$d")"
-    # Claude Code has its own built-in ship skill; only OpenCode gets the package's
-    if [ "$TARGET" = claude ] && [ "$rel" = skills/ship ]; then say skipped "$rel (built into Claude Code)"; continue; fi
     if [ -d "$target" ] && diff -rq "$d" "$target" >/dev/null 2>&1; then say unchanged "$rel"; continue; fi
     clear_target "$target"
     run mkdir -p "$SKILLS_DEST"

@@ -44,11 +44,10 @@ put() { local h="$1" fmt="$2"; shift 2; printf "$fmt" "$@" > "$h/.claude/CLAUDE.
 
 echo "== Installing and re-running"
 H=$(newhome b1); rmdir "$H/.claude"; inst "$H" >/dev/null
-[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | tr '\n' ' ')" = "blueprint inspect report scope spec tdd " ] && ok "B1 fresh install copies 3 agents and 6 skills, all but ship" || bad B1 "skills: $(ls "$H/.claude/skills" | tr '\n' ' ')"
+[ "$(ls "$H/.claude/agents" | wc -l | tr -d ' ')" = 3 ] && [ "$(ls "$H/.claude/skills" | tr '\n' ' ')" = "blueprint inspect land report scope spec tdd " ] && ok "B1 fresh install copies 3 agents and 7 skills, land included" || bad B1 "skills: $(ls "$H/.claude/skills" | tr '\n' ' ')"
 H=$(newhome b1s); out=$(inst "$H")
-[ ! -e "$H/.claude/skills/ship" ] && printf '%s\n' "$out" | grep -q '^skipped        skills/ship (built into Claude Code)$' && ok "B1 the claude target skips ship and says it is built into Claude Code" || bad B1 "ship: $(printf '%s' "$out" | grep -m1 ship)"
 same "B1 fresh CLAUDE.md is the section" "$H/.claude/CLAUDE.md" "$SEC"
-out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 10 ] && printf '%s\n' "$out" | grep -q '^skipped  *skills/ship' && ok "B1 rerun reports 10 unchanged and ship skipped" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
+out=$(inst "$H"); [ "$(printf '%s\n' "$out" | grep -c '^unchanged')" = 11 ] && ok "B1 rerun reports 11 unchanged" || bad B1 "rerun: $(printf '%s' "$out" | head -3)"
 H=$(newhome b2); put "$H" '# Mine\n\n%s\n' "$OLD"
 mkdir -p "$H/.claude/agents"; printf 'my edit\n' > "$H/.claude/agents/critic.md"
 a=$(treesum "$H"); out=$(inst "$H" "" --dry-run); [ "$a" = "$(treesum "$H")" ] && ok "B2 --dry-run changes nothing" || bad B2 "tree changed"
@@ -225,12 +224,12 @@ fi
 [ "$(tail -n 1 "$PKG/CLAUDE.md")" = "$MARK" ] && ok "Q6 CLAUDE.md ends with the end-of-section comment" || bad Q6 "wrong last line"
 missing=""; for n in $(grep -o '`[a-z-]*`' "$PKG/CLAUDE.md" | tr -d '`' | sort -u); do [ -f "$PKG/agents/$n.md" ] || [ -d "$PKG/skills/$n" ] || missing="$missing $n"; done
 [ -z "$missing" ] && ok "Q7 every agent and skill CLAUDE.md names is in the package" || bad Q7 "not in agents/ or skills/:$missing"
-g="$PKG/skills/ship/SKILL.md"; missing=""
-grep '^- Git work' "$PKG/CLAUDE.md" | grep 'push' | grep 'only when I ask' | grep 'In OpenCode, load the `ship` skill first' | grep 'take precedence over the default git instructions where they conflict' | grep -q 'In Claude Code, `ship` is built in and only I start it, with `/ship`' || missing="$missing [CLAUDE.md: a git line covering push, only when I ask, OpenCode loading ship first with its rules taking precedence where they conflict, and Claude Code's built-in ship started only by /ship]"
-sed -n 's/^description: //p' "$g" 2>/dev/null | grep -q 'push' || missing="$missing [ship description: push]"
+g="$PKG/skills/land/SKILL.md"; missing=""
+grep '^- Git work' "$PKG/CLAUDE.md" | grep 'push' | grep 'only when I ask' | grep 'Load the `land` skill first' | grep -q 'take precedence over the default git instructions where they conflict' || missing="$missing [CLAUDE.md: a git line covering push, only when I ask, loading land first with its rules taking precedence where they conflict]"
+sed -n 's/^description: //p' "$g" 2>/dev/null | grep -q 'push' || missing="$missing [land description: push]"
 for s in '<short-kebab-name>' 'Closes #<issue>' 'squash if more'; do grep -q -- "$s" "$PKG/CLAUDE.md" && missing="$missing [CLAUDE.md still has: $s]"; done
-for s in "run the project's lint and type check" '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -qi -- "$s" "$g" 2>/dev/null || missing="$missing [ship: $s]"; done
-[ -z "$missing" ] && ok "Q8 the git rules (branch, commit, PR, merge, cleanup, issue update) are in the ship skill, and CLAUDE.md only says to use it when asked" || bad Q8 "missing:$missing"
+for s in "run the project's lint and type check" '^## Branch' '<short-kebab-name>' '^## Commit' 'Conventional Commits' '^## PR' 'Closes #<issue>' '^## Merge' 'squash if more' '^## After merging' 'remote and local branch' 'link to the merged PR'; do grep -qi -- "$s" "$g" 2>/dev/null || missing="$missing [land: $s]"; done
+[ -z "$missing" ] && ok "Q8 the git rules (branch, commit, PR, merge, cleanup, issue update) are in the land skill, and CLAUDE.md only says to use it when asked" || bad Q8 "missing:$missing"
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -q '`tdd`' && grep '^- Something broken' "$PKG/CLAUDE.md" | grep -q '`tdd`' && ok "Q9 the non-trivial and bug-fix routes in CLAUDE.md name tdd" || bad Q9 "tdd missing from a route"
 a="$PKG/agents"; grep -qx 'model: sonnet' "$a/critic.md" && grep -qx 'effort: medium' "$a/critic.md" && grep -qx 'model: haiku' "$a/scout.md" && grep -qx 'effort: medium' "$a/scout.md" \
   && grep -qx 'model: sonnet' "$a/smith.md" && grep -qx 'effort: low' "$a/smith.md" \
@@ -242,7 +241,7 @@ hits=$(cd "$PKG" && grep -nE "$legacy|[b]uild (report|skill)" README.md install.
 # The agents only get the build checks: critic's prompt names its role (code review) with a word on the list above
 hits="$hits$(cd "$PKG" && grep -nE '`[b]uild`|[b]uild (report|skill)' agents/*.md)"
 [ -z "$hits" ] && ok "Q11 no earlier names or upgrade paths are left" || bad Q11 "$(printf '%s' "$hits" | head -3 | cut -c1-80)"
-[ "$(ls "$PKG/skills" | tr '\n' ' ')" = "blueprint inspect report scope ship spec tdd " ] && ok "Q12 the package ships exactly the skills blueprint, inspect, report, scope, ship, spec and tdd" || bad Q12 "skills/ holds: $(ls "$PKG/skills" | tr '\n' ' ')"
+[ "$(ls "$PKG/skills" | tr '\n' ' ')" = "blueprint inspect land report scope spec tdd " ] && ok "Q12 the package ships exactly the skills blueprint, inspect, land, report, scope, spec and tdd" || bad Q12 "skills/ holds: $(ls "$PKG/skills" | tr '\n' ' ')"
 grep '^- Mechanical changes' "$PKG/CLAUDE.md" | grep '`critic`' | grep 'logic, security, auth or data' | grep -q 'keeps the meaning' && ok "Q13 mechanical changes skip the plan steps and critic, unless they touch logic, security, auth or data" || bad Q13 "no mechanical-changes route with its limits"
 s="$PKG/agents/smith.md"; fm=$(sed -n '2,/^---$/p' "$s" 2>/dev/null); missing=""
 for t in Edit Write Bash; do printf '%s\n' "$fm" | grep '^tools:' | grep -q "$t" || missing="$missing [tools: $t]"; done
@@ -273,14 +272,14 @@ has skills/blueprint/SKILL.md '**Acceptance criteria**'; has skills/blueprint/SK
 has skills/inspect/SKILL.md '`/blueprint`'
 has agents/smith.md "The plan doesn't hold"; has agents/smith.md 'acceptance criteria'
 has agents/critic.md '**Acceptance criteria'; has agents/critic.md '[plan]'; has agents/critic.md 'as text'
-has skills/ship/SKILL.md '`docs/conf/tasks/` is never committed'
+has skills/land/SKILL.md '`docs/conf/tasks/` is never committed'
 grep -q '^| `foreman` |' "$PKG/README.md" && missing="$missing [README still has a foreman row]"
 grep -q '^| `check` |' "$PKG/README.md" && missing="$missing [README still has a check row]"
 has README.md 'docs/conf/tasks/<slug>/'
 # the dropped skills and their slash commands are named nowhere (this file is left out, since it names them)
 hits=$(cd "$PKG" && grep -nE '(^|[ `(])/(critic|scout|smith|foreman|check)\b' CLAUDE.md README.md agents/*.md skills/*/SKILL.md)
 [ -z "$hits" ] || missing="$missing [still names a dropped skill or its slash command: $(printf '%s' "$hits" | head -2 | cut -c1-60 | tr '\n' ' ')]"
-[ -z "$missing" ] && ok "Q18 acceptance criteria and plan-level findings are named in blueprint, smith, critic, inspect, ship and the README, and no dropped skill is named" || bad Q18 "missing:$missing"
+[ -z "$missing" ] && ok "Q18 acceptance criteria and plan-level findings are named in blueprint, smith, critic, inspect, land and the README, and no dropped skill is named" || bad Q18 "missing:$missing"
 missing=""
 has skills/tdd/SKILL.md 'not the full suite'
 for f in skills/tdd/SKILL.md agents/smith.md agents/critic.md; do has "$f" "Don't run the full suite"; done
@@ -308,13 +307,13 @@ for f in agents/smith.md agents/critic.md; do has "$f" 'after 2 minutes'; has "$
 [ -z "$missing" ] && ok "Q28 tdd and smith finish with lint and typecheck, and smith and critic give long commands a 10-minute timeout" || bad Q28 "$missing"
 
 missing=""
-has skills/ship/SKILL.md 'full test suite only when the user asks for it'
-grep -qF "Run the project's tests" "$PKG/skills/ship/SKILL.md" && missing="$missing [ship still always runs the tests]"
-for f in skills/tdd/SKILL.md agents/smith.md agents/critic.md; do has "$f" 'only `ship` runs it, when the user asks'; done
+has skills/land/SKILL.md 'full test suite only when the user asks for it'
+grep -qF "Run the project's tests" "$PKG/skills/land/SKILL.md" && missing="$missing [land still always runs the tests]"
+for f in skills/tdd/SKILL.md agents/smith.md agents/critic.md; do has "$f" 'only `land` runs it, when the user asks'; done
 has README.md 'the full test suite only when you ask'
 hits=$(cd "$PKG" && grep -n 'left to CI or' README.md agents/*.md skills/*/SKILL.md)
 [ -z "$hits" ] || missing="$missing [still leaves the full suite to CI: $(printf '%s' "$hits" | head -2 | cut -c1-60 | tr '\n' ' ')]"
-[ -z "$missing" ] && ok "Q29 the full suite is optional and runs only in ship, when the user asks" || bad Q29 "$missing"
+[ -z "$missing" ] && ok "Q29 the full suite is optional and runs only in land, when the user asks" || bad Q29 "$missing"
 
 missing=""
 has agents/smith.md 'in a separate Bash call, never chained with the edit'; has agents/smith.md 'in parallel'
@@ -351,11 +350,11 @@ grep -q '^after a change.*/report' "$PKG/README.md" || missing="$missing [README
 grep -A3 '^`tests/regress.sh` runs' "$PKG/README.md" | grep -qF 'report' || missing="$missing [README Tests: report]"
 [ -z "$missing" ] && ok "Q27 report is plain-YAML, runs only when asked, names its sections and evidence rule, and CLAUDE.md and the README cover it" || bad Q27 "$missing"
 
-# ship runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
-missing=""; g="$PKG/skills/ship/SKILL.md"
-for t in "Run the project's lint and type check" 'stop and report if they fail' 'keep it' '`docs/conf/tasks/` is never committed' "the PR's existing base"; do grep -qF -- "$t" "$g" 2>/dev/null || missing="$missing [ship: $t]"; done
-for t in 'status.md' '`- Parent:`' 'Run the `check` skill'; do grep -qF -- "$t" "$g" 2>/dev/null && missing="$missing [ship still has: $t]"; done
-[ -z "$missing" ] && ok "Q19 ship runs lint and type check before committing and no longer reads a status file" || bad Q19 "missing:$missing"
+# land runs the tests itself, keeps a task branch without a status file, and finds the PR base without one
+missing=""; g="$PKG/skills/land/SKILL.md"
+for t in "Run the project's lint and type check" 'stop and report if they fail' 'keep it' '`docs/conf/tasks/` is never committed' "the PR's existing base"; do grep -qF -- "$t" "$g" 2>/dev/null || missing="$missing [land: $t]"; done
+for t in 'status.md' '`- Parent:`' 'Run the `check` skill'; do grep -qF -- "$t" "$g" 2>/dev/null && missing="$missing [land still has: $t]"; done
+[ -z "$missing" ] && ok "Q19 land runs lint and type check before committing and no longer reads a status file" || bad Q19 "missing:$missing"
 
 # scope, spec and blueprint are loadable on their own, run by the user, and each names the next step
 missing=""
@@ -379,7 +378,7 @@ has skills/spec/SKILL.md 'spec.md'; has skills/blueprint/SKILL.md 'plan.md'; has
 sed -n 's/^description: //p' "$PKG/skills/scope/SKILL.md" | grep -qF '/spec' || missing="$missing [scope description names /spec]"
 sed -n 's/^description: //p' "$PKG/skills/spec/SKILL.md" | grep -qF '/blueprint' || missing="$missing [spec description names /blueprint]"
 sed -n 's/^description: //p' "$PKG/skills/blueprint/SKILL.md" | grep -qF 'smith' || missing="$missing [blueprint description names smith]"
-# fix round: blueprint's input, slug reuse, revising a plan, ship's base, bare requests
+# fix round: blueprint's input, slug reuse, revising a plan, land's base, bare requests
 for n in spec blueprint; do
   has "skills/$n/SKILL.md" 'argument-hint: the request, or a task folder to save to'
   has "skills/$n/SKILL.md" 'is for the same task (same summary or issue), update it in place'
@@ -388,7 +387,7 @@ has skills/blueprint/SKILL.md 'Start from the spec agreed in this conversation, 
 has skills/blueprint/SKILL.md 'revise the existing plan (the saved `plan.md`, or the one in this conversation)'
 grep -q '^Every route\.' "$PKG/skills/blueprint/SKILL.md" && missing="$missing [blueprint still says Every route.]"
 grep -q ' $' "$PKG/skills/spec/SKILL.md" && missing="$missing [spec has trailing spaces]"
-has skills/ship/SKILL.md "isn't known"; has skills/ship/SKILL.md 'ask the user which base to use'
+has skills/land/SKILL.md "isn't known"; has skills/land/SKILL.md 'ask the user which base to use'
 grep '^- Non-trivial change' "$PKG/CLAUDE.md" | grep -qF 'For a bare request, suggest `/scope`.' || missing="$missing [CLAUDE.md: bare request suggests /scope]"
 has README.md 'run `/blueprint` again'
 # phase content: scope (AC5), spec (AC6), blueprint (AC7), tdd and smith (AC8), critic (AC9)
@@ -417,7 +416,7 @@ OCWD="$T/oc-cwd"; rm -rf "$OCWD"; mkdir -p "$OCWD"; cd "$OCWD" || exit 1
 H=$(ohome oc0); a=$(treesum "$H"); out=$(inst "$H" "" --target bogus); rc=$?
 [ $rc = 1 ] && [ "$a" = "$(treesum "$H")" ] && printf '%s' "$out" | grep -q 'Unknown target: bogus (use claude or opencode)' && ok "OC1 --target bogus exits 1, says so and writes nothing" || bad OC1 "rc=$rc output: $out"
 H=$(ohome oc1); out=$(inst "$H" "" --target opencode); rc=$?
-[ $rc = 0 ] && [ "$(ls "$H/$OC/agents" | tr '\n' ' ')" = "critic.md scout.md smith.md " ] && [ "$(ls "$H/$OC/skills" | wc -l | tr -d ' ')" = 7 ] && [ -f "$H/$OC/skills/ship/SKILL.md" ] && [ ! -e "$H/.claude" ] && ok "OC2 --target opencode installs 3 agents and 7 skills, ship included, under ~/.config/opencode, and nothing in ~/.claude" || bad OC2 "rc=$rc: $(find "$H" -maxdepth 3 | head -20 | tr '\n' ' ')"
+[ $rc = 0 ] && [ "$(ls "$H/$OC/agents" | tr '\n' ' ')" = "critic.md scout.md smith.md " ] && [ "$(ls "$H/$OC/skills" | wc -l | tr -d ' ')" = 7 ] && [ -f "$H/$OC/skills/land/SKILL.md" ] && [ ! -e "$H/.claude" ] && ok "OC2 --target opencode installs 3 agents and 7 skills, land included, under ~/.config/opencode, and nothing in ~/.claude" || bad OC2 "rc=$rc: $(find "$H" -maxdepth 3 | head -20 | tr '\n' ' ')"
 same "OC2 the rules section is AGENTS.md" "$H/$OC/AGENTS.md" "$SEC"
 printf '%s\n' "$out" | grep -qi 'warning' && bad OC2 "unexpected warning: $(printf '%s' "$out" | grep -i -m1 warning)" || ok "OC2 no warning on a clean install"
 P="$T/oc-proj"; rm -rf "$P"; mkdir -p "$P"; H=$(ohome oc2); out=$(cd "$P" && inst "$H" "" --target opencode --project); rc=$?
