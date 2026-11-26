@@ -19,7 +19,7 @@ Every change to behavior starts with a test that fails for the right reason.
 - When the behavior spans layers, work outside-in: a failing higher-level test first, then unit tests.
 
 ## Rules
-- While you work, run the narrowest command that covers the change: one test, file or directory, not the project's whole `make test` or CI check. When the behavior is complete, run the project's lint and typecheck (for a compiled language, the build) and fix what they find. Don't run the full suite; only `ship` runs it, when the user asks.
+- While you work, run the narrowest command that covers the change: one test, file or directory, not the project's whole `make test` or CI check. When the behavior is complete, run the project's lint and typecheck (for a compiled language, the build) and fix what they find. Don't run the full suite; only `land` runs it, when the user asks.
 - Use the project's existing test framework, layout and naming. Don't add a new framework or dependency without asking.
 - Test behavior through the public interface, not implementation details. Mock only at real boundaries (network, clock, filesystem, external services).
 - One behavior per test, with a name that says what it checks.

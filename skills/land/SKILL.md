@@ -1,9 +1,9 @@
 ---
-name: ship
+name: land
 description: Commit, push, open a pull request or merge, following the branch, commit, PR and merge rules. Use whenever the user asks to commit, push, open a PR or merge, and only up to the stage they name. Merging includes cleanup.
 ---
 
-# Ship
+# Land
 
 Take the change as far as the user asked (commit, PR or merge), and no further.
 
