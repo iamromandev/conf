@@ -24,6 +24,7 @@ Every change to behavior starts with a test that fails for the right reason.
 - Test behavior through the public interface, not implementation details. Mock only at real boundaries (network, clock, filesystem, external services).
 - One behavior per test, with a name that says what it checks.
 - Test only the behaviors the change needs (the spec's acceptance criteria, or the bug being fixed), not every input variation. Cover edge cases only when they carry real risk, and use a parameterized or table test for several cases of one behavior. Add at most one new test per acceptance criterion (or one for the bug); any test beyond that needs a reason in your report.
+- Before writing each test, state in one line the bug it would catch: a realistic mistake in the code that would make it fail. If you can't name one, don't write the test. Tests that only restate the implementation, assert on mocks, or can't fail aren't worth keeping.
 - Before adding a test, look for an existing one that covers the behavior. If one does, extend or update it instead of writing a near-duplicate.
 - In the refactor step, also refactor the tests: delete tests that a newer test fully covers, and tests of behavior you removed. Say which ones you deleted and why.
 - If you already wrote code without a test, write the test now and prove it can fail: temporarily break or revert the code, watch the test fail, then restore it.
